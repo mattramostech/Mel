@@ -1,30 +1,40 @@
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-
-defaults:
-  run:
-    working-directory: mel-skia
-
-jobs:
-  check:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      # rustup reads mel-skia/rust-toolchain.toml and installs the pinned
-      # toolchain, components, and iOS targets on first cargo invocation.
-      - name: Show toolchain
-        run: rustup show
-      - name: Format
-        run: cargo fmt --all --check
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test (host)
-        run: cargo test --workspace
-      - name: Build (iOS device)
-        run: cargo build --workspace --target aarch64-apple-ios
-      - name: Build (iOS simulator)
-        run: cargo build --workspace --target aarch64-apple-ios-sim
+# CI — intentionally disabled for now.
+#
+# At this stage of the project (Phase 0, empty crate skeleton, single
+# contributor) a CI run on every push/PR was judged unnecessary: there is no
+# logic to test yet, and every check below is already run locally before each
+# feature review (CONTEXT.md §6). Keeping the workflow commented out preserves
+# the intended setup so it can be re-enabled by uncommenting when the project
+# grows enough to warrant it (e.g. when skia-safe lands in feature 003 and
+# build breakage becomes expensive, or when a second contributor joins).
+#
+# name: CI
+#
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#
+# defaults:
+#   run:
+#     working-directory: mel-skia
+#
+# jobs:
+#   check:
+#     runs-on: macos-15
+#     steps:
+#       - uses: actions/checkout@v4
+#       # rustup reads mel-skia/rust-toolchain.toml and installs the pinned
+#       # toolchain, components, and iOS targets on first cargo invocation.
+#       - name: Show toolchain
+#         run: rustup show
+#       - name: Format
+#         run: cargo fmt --all --check
+#       - name: Clippy
+#         run: cargo clippy --workspace --all-targets -- -D warnings
+#       - name: Test (host)
+#         run: cargo test --workspace
+#       - name: Build (iOS device)
+#         run: cargo build --workspace --target aarch64-apple-ios
+#       - name: Build (iOS simulator)
+#         run: cargo build --workspace --target aarch64-apple-ios-sim

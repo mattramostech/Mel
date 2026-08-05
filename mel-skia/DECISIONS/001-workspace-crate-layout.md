@@ -19,7 +19,7 @@ and single-package packaging (an artifact of Dart's library system).
 
 **One Cargo workspace at `mel-skia/`, one crate per layer** under `crates/`:
 
-```
+```text
 mel-foundation   → (nothing)
 mel-painting     → foundation            (only crate allowed to touch skia-safe)
 mel-compositing  → painting, foundation
@@ -75,3 +75,10 @@ for both iOS targets.
 Reviewed and approved 2026-08-05. Correctness ✅ · Architecture ✅ ·
 API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
 No debt items filed.
+
+**Amendment (2026-08-05, post-review):** the CI workflow was disabled (kept
+commented out in `.github/workflows/ci.yml`). With an empty skeleton and a
+single contributor, running CI on every push adds no signal — all checks are
+already run locally before each review. Re-enable by uncommenting when it
+starts paying for itself (skia-safe build breakage in 003+, or a second
+contributor).
