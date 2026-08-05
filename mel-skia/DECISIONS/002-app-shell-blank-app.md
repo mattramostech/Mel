@@ -111,4 +111,8 @@ full-screen `UIWindow` with a plain root `UIViewController` — the blank app.
 
 ## Review outcome
 
-_Pending review._
+Reviewed and approved 2026-08-05. Correctness ✅ · Architecture ✅ ·
+API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
+Debt filed: **002-1** (classic `UIApplicationDelegate` lifecycle instead of
+`UIScene`; re-evaluate at 008 — Apple has announced scene adoption will
+eventually become mandatory, and Flutter itself migrated in 2025).
