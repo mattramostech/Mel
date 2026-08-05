@@ -19,3 +19,4 @@ running). See [ADR 002](../DECISIONS/002-app-shell-blank-app.md).
 | # | Example | Shows |
 | --- | --- | --- |
 | 002 | `002_blank_app` | Blank white full-screen app from the pure-Rust UIKit shell |
+| 003 | `003_skia_surface` | Full-screen honey color rasterized by a Skia canvas (CPU raster) |

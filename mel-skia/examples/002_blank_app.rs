@@ -8,7 +8,10 @@
 
 #[cfg(target_os = "ios")]
 fn main() -> ! {
-    mel_platform::run()
+    // Draw nothing: an untouched frame presents as fully transparent, so the
+    // shell's white window background is all there is — the blank app.
+    // (`run` grew its draw-callback parameter in feature 003.)
+    mel_platform::run(|_frame| {})
 }
 
 #[cfg(not(target_os = "ios"))]
