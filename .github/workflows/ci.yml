@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+defaults:
+  run:
+    working-directory: mel-skia
+
+jobs:
+  check:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      # rustup reads mel-skia/rust-toolchain.toml and installs the pinned
+      # toolchain, components, and iOS targets on first cargo invocation.
+      - name: Show toolchain
+        run: rustup show
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test (host)
+        run: cargo test --workspace
+      - name: Build (iOS device)
+        run: cargo build --workspace --target aarch64-apple-ios
+      - name: Build (iOS simulator)
+        run: cargo build --workspace --target aarch64-apple-ios-sim

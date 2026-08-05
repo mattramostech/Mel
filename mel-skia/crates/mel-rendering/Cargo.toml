@@ -1,0 +1,9 @@
+[package]
+name = "mel-rendering"
+description = "RenderObject: layout, paint, hit testing."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
