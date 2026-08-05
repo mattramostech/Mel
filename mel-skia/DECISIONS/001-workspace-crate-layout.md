@@ -72,4 +72,6 @@ for both iOS targets.
 
 ## Review outcome
 
-_Pending review._
+Reviewed and approved 2026-08-05. Correctness ✅ · Architecture ✅ ·
+API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
+No debt items filed.

@@ -15,7 +15,7 @@ Goal: an iOS app we fully control, with a Skia surface we can draw into,
 driven by a display-link frame loop. This is Mel's "embedder + engine
 bootstrap". Target: iOS Simulator first, real device as its own feature.
 
-- [~] **001 — Workspace, crate layout & iOS toolchain** — Cargo workspace, decide
+- [x] **001 — Workspace, crate layout & iOS toolchain** — Cargo workspace, decide
   crate-per-layer vs. single crate with modules; install `aarch64-apple-ios` +
   `aarch64-apple-ios-sim` targets; CI basics (`fmt`, `clippy`, `test` on host mac).
   *Done when:* an empty skeleton cross-compiles for both iOS targets and the ADR records the layout decision.
@@ -407,7 +407,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 
 | Phase | Features | Done |
 | --- | --- | --- |
-| 0 — Platform Shell (iOS) | 9 | 0 |
+| 0 — Platform Shell (iOS) | 9 | 1 |
 | 1 — Foundation | 7 | 0 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
@@ -420,4 +420,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **0** |
+| **Total** | **99** | **1** |
