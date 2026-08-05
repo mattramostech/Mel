@@ -1,0 +1,9 @@
+[package]
+name = "mel-platform"
+description = "iOS app shell: display link, raster surface, touch input."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

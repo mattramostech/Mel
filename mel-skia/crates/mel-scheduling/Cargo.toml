@@ -1,0 +1,9 @@
+[package]
+name = "mel-scheduling"
+description = "Frame pipeline, vsync, tickers."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

@@ -1,0 +1,9 @@
+[package]
+name = "mel-widgets"
+description = "Widget/Element trees, state, build."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

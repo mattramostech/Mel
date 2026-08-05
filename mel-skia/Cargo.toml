@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/mel-foundation",
+    "crates/mel-painting",
+    "crates/mel-compositing",
+    "crates/mel-scheduling",
+    "crates/mel-rendering",
+    "crates/mel-widgets",
+    "crates/mel-platform",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/mateusramos/Mel"
+
+# Layer crates reference each other through here so version bumps happen in
+# one place. Edges are only added to a crate's [dependencies] when a feature
+# actually needs them — Cargo then enforces that no layer depends upward.
+[workspace.dependencies]
+mel-foundation = { path = "crates/mel-foundation" }
+mel-painting = { path = "crates/mel-painting" }
+mel-compositing = { path = "crates/mel-compositing" }
+mel-scheduling = { path = "crates/mel-scheduling" }
+mel-rendering = { path = "crates/mel-rendering" }
+mel-widgets = { path = "crates/mel-widgets" }
+mel-platform = { path = "crates/mel-platform" }

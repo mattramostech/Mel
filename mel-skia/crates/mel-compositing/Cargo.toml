@@ -1,0 +1,9 @@
+[package]
+name = "mel-compositing"
+description = "Layer tree and scene building."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
