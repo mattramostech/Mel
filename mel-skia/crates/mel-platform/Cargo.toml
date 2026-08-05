@@ -7,3 +7,33 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+
+# UIKit interop (ADR 002). The framework crates gate every class behind a
+# feature; we list exactly what the shell touches instead of pulling the
+# ~400-feature default set.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSObject",
+    "NSString",
+    "NSDictionary",
+] }
+objc2-ui-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "UIResponder",
+    "UIApplication",
+    "UIWindow",
+    "UIView",
+    "UIViewController",
+    "UIScreen",
+    "UIColor",
+] }
+
+# Demo files live at the repo-convention location `examples/NNN_slug.rs`
+# (CONTEXT.md §6); this crate is their cargo host (ADR 002). Launch with
+# `scripts/run-sim.sh <name>`.
+[[example]]
+name = "002_blank_app"
+path = "../../examples/002_blank_app.rs"

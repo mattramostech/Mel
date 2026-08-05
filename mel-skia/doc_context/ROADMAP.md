@@ -19,7 +19,7 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
   crate-per-layer vs. single crate with modules; install `aarch64-apple-ios` +
   `aarch64-apple-ios-sim` targets; CI basics (`fmt`, `clippy`, `test` on host mac).
   *Done when:* an empty skeleton cross-compiles for both iOS targets and the ADR records the layout decision.
-- [ ] **002 — App shell decision & blank app** — THE embedding ADR: pure-Rust
+- [x] **002 — App shell decision & blank app** — THE embedding ADR: pure-Rust
   shell (winit on iOS / raw `objc2`+UIKit bindings) vs. thin Xcode host app
   linking Mel as a `staticlib` via FFI. Weigh: build/run loop speed, lifecycle
   access, long-term multi-platform story.
@@ -407,7 +407,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 
 | Phase | Features | Done |
 | --- | --- | --- |
-| 0 — Platform Shell (iOS) | 9 | 1 |
+| 0 — Platform Shell (iOS) | 9 | 2 |
 | 1 — Foundation | 7 | 0 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
@@ -420,4 +420,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **1** |
+| **Total** | **99** | **2** |

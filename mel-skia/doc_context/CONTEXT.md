@@ -197,9 +197,11 @@ mel-skia/
 
 At the start of any session:
 1. Read ROADMAP.md — find the first `[~]` (in progress) or `[ ]` feature.
-2. Read the ADRs of the current phase to reload context on recent decisions.
-3. Check `DEBT.md` for anything relevant to the feature at hand.
-4. Follow the Feature Loop (§2). Do **one** feature, then stop for review.
+2. Read [mel_spec.md](mel_spec.md) — the snapshot of what is implemented
+   today and where (kept up to date as part of every feature's diff).
+3. Read the ADRs of the current phase to reload context on recent decisions.
+4. Check `DEBT.md` for anything relevant to the feature at hand.
+5. Follow the Feature Loop (§2). Do **one** feature, then stop for review.
 
 Never implement ahead of the roadmap. If a feature turns out to need something
 scheduled later, either (a) split off the minimal prerequisite as a new
