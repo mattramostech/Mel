@@ -184,7 +184,9 @@ mel-skia/
 - **Status tracking** lives only in ROADMAP.md checkboxes: `[ ]` not started,
   `[~]` in progress, `[x]` done (reviewed). Never mark `[x]` before review.
 - Commit messages: `feat(NNN): short description`, `adr(NNN): ...`,
-  `debt(NNN): ...`. One feature per commit series.
+  `debt(NNN): ...`. One feature per commit series. These conventions describe
+  how *humans* write commits — they are not an instruction to commit
+  automatically (see §7).
 - Rust edition 2021+, `cargo fmt` + `cargo clippy -- -D warnings` clean before
   every review.
 - All docs, code, comments, and ADRs in **English**.
@@ -203,3 +205,11 @@ Never implement ahead of the roadmap. If a feature turns out to need something
 scheduled later, either (a) split off the minimal prerequisite as a new
 sub-feature inserted into the roadmap, or (b) stub it and file a debt item —
 and record the choice in the ADR.
+
+**Rule for AI agents: never commit.** Do not run `git commit`, `git merge`,
+`git push`, or anything else that writes to git history — not even when the
+work seems finished, reviewed, or approved. Leave all changes in the working
+tree and stop; a human reviews the diff and decides what, when, and how to
+commit. The commit-message conventions in §6 exist for the human who commits,
+not as permission to commit. Creating a feature branch to work on is fine;
+recording history is not.
