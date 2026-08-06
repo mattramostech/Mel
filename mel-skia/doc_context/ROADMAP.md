@@ -24,7 +24,7 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
   linking Mel as a `staticlib` via FFI. Weigh: build/run loop speed, lifecycle
   access, long-term multi-platform story.
   *Done when:* a blank full-screen app launches on the Simulator via a documented one-command flow; ADR records the decision.
-- [~] **003 — Skia surface on screen** — get a `skia-safe` surface presenting
+- [x] **003 — Skia surface on screen** — get a `skia-safe` surface presenting
   into the app's layer (CPU raster into a `CALayer`, or Metal-backed
   `CAMetalLayer` if 002's shell makes that the path of least resistance —
   record which and why).
@@ -407,7 +407,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 
 | Phase | Features | Done |
 | --- | --- | --- |
-| 0 — Platform Shell (iOS) | 9 | 2 |
+| 0 — Platform Shell (iOS) | 9 | 3 |
 | 1 — Foundation | 7 | 0 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
@@ -420,4 +420,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **2** |
+| **Total** | **99** | **3** |

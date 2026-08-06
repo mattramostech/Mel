@@ -106,4 +106,8 @@ frame is drawn **once at launch**; loop in **005**); GPU/Metal (**008**).
 
 ## Review outcome
 
-Pending human review.
+Reviewed and approved 2026-08-05. Correctness ✅ · Architecture ✅ ·
+API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
+No debt items filed — the known limitations (logical-points buffer, single
+launch-time frame, CPU raster, per-present copy) are scheduled roadmap
+features (004, 005, 008), recorded in this ADR's Decision/Consequences.

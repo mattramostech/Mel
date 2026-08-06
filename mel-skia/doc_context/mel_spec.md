@@ -13,21 +13,21 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-08-05, feature 003 built (pending review)._
+_Last updated: 2026-08-05, after feature 003._
 
 ---
 
 ## 1. Status at a glance
 
-- **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank app).
-- **In progress:** 003 — Skia surface on screen (built, awaiting review).
+- **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
+  app), 003 (Skia surface on screen).
 - **Next up:** 004 — Scale factor, safe areas & rotation.
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene` — see [DEBT.md](../DEBT.md)).
 
 ## 2. What runs today
 
 ```sh
-scripts/run-sim.sh 003_skia_surface
+scripts/run-sim.sh 003_skia_surface   # or: make run
 ```
 
 launches a full-screen solid honey color on the iOS Simulator, rasterized by
@@ -155,6 +155,10 @@ Run on the Simulator: `scripts/run-sim.sh <example>` — builds (debug) for
 storyboard), boots an iPhone Simulator if none is booted, `simctl install` +
 `launch --console-pty` (app stdout streams to the terminal — the only
 "logging" channel until Phase 11). Apple Silicon only.
+
+A thin [Makefile](../Makefile) wraps both flows: `make run`
+(`EXAMPLE=NNN_slug` to pick one, defaults to the latest) and `make check`
+(the four host/iOS commands above).
 
 ## 7. Decisions in force (details in `DECISIONS/`)
 
