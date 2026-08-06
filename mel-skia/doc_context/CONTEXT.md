@@ -173,12 +173,14 @@ Rules:
 
 ```
 mel-skia/
-├── CONTEXT.md          ← this file
-├── ROADMAP.md          ← feature schedule; the single source of truth for status
+├── doc_context/        ← this file · ROADMAP.md (the single source of truth
+│                         for status) · mel_spec.md (implementation snapshot)
 ├── DEBT.md             ← accepted ⚠️ items, each tagged with a feature ID
 ├── DECISIONS/          ← one ADR per feature
 ├── examples/           ← NNN_slug.rs runnable demos, never deleted
-└── (crates/ or src/)   ← decided in feature 001
+├── scripts/            ← run-sim.sh, the one-command Simulator flow (ADR 002)
+├── Makefile            ← make run / make check wrappers
+└── crates/             ← one crate per layer (decided in feature 001)
 ```
 
 - **Status tracking** lives only in ROADMAP.md checkboxes: `[ ]` not started,

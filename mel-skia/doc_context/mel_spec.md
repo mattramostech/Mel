@@ -13,16 +13,16 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-08-06, feature 004 built, pending review._
+_Last updated: 2026-08-06, after feature 004._
 
 ---
 
 ## 1. Status at a glance
 
 - **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
-  app), 003 (Skia surface on screen).
-- **In progress:** 004 — Scale factor, safe areas & rotation (built, pending
-  review).
+  app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
+  rotation).
+- **Next up:** 005 — Redraw-on-demand loop.
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene` — see [DEBT.md](../DEBT.md)).
 
 ## 2. What runs today
@@ -103,11 +103,13 @@ impl Frame {
   window alive in its ivars) and `MelViewController`, whose
   `viewDidLayoutSubviews` is the **single render trigger** (ADR 004,
   mirroring Flutter): first display, rotation and safe-area changes all read
-  bounds × `contentScaleFactor` + `safeAreaInsets`, raster a physical-pixel
-  `Frame` through the app's `FnMut` callback (parked in a main-thread
-  `thread_local` by `run()`), and present it as the layer's contents with
-  `contentsScale` set (CPU raster — ADR 003). A memoized metrics snapshot
-  skips redundant layout passes. Redraw _without_ a metrics change is 005.
+  bounds × `window.screen.scale` + `safeAreaInsets` (not
+  `contentScaleFactor` — it stays 1.0 for views UIKit never draws into; see
+  ADR 004's Alternatives), raster a physical-pixel `Frame` through the app's `FnMut`
+  callback (parked in a main-thread `thread_local` by `run()`), and present
+  it as the layer's contents with `contentsScale` set (CPU raster — ADR
+  003). A memoized metrics snapshot skips redundant layout passes. Redraw
+  _without_ a metrics change is 005.
 - **Lifecycle model:** classic `UIApplicationDelegate`/`UIWindow`, _not_
   scene-based (`UIScene`) — debt 002-1, re-evaluated at 008. The
   `#[expect(deprecated)]` on `UIScreen::mainScreen` / `UIWindow::initWithFrame`

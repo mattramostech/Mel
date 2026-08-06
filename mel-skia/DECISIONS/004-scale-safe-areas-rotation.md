@@ -136,4 +136,13 @@ buffer moves to physical pixels.**
 
 ## Review outcome
 
-*Pending human review.*
+Reviewed and approved 2026-08-06. Correctness ✅ · Architecture ✅ ·
+API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
+No debt items filed — the known limitations (stretched contents during the
+rotation *animation*, per-present buffer copies, manual logical→physical
+conversion in app code until canvas transforms exist) are scheduled roadmap
+features (005, 008, 022), recorded in this ADR's Decision/Consequences.
+Verified: the 100-logical-pt square measured exactly 300×300 physical px on
+the 3× Simulator (screenshot pixel measurement), insets reported 0/59/0/34,
+and the `@ 1×` `contentScaleFactor` pitfall is documented under
+Alternatives.
