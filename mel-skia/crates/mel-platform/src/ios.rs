@@ -1,9 +1,10 @@
 //! The UIKit side of the shell: a Rust-defined `UIApplicationDelegate` that
 //! creates and owns the window (the classic, scene-less lifecycle — ADR 002,
-//! debt 002-1). This module is the only place allowed to speak Objective-C;
-//! every `unsafe` here is ObjC interop.
+//! debt 002-1), and a Rust-defined root `UIViewController` whose layout
+//! callback is the render trigger (ADR 004). This module is the only place
+//! allowed to speak Objective-C; every `unsafe` here is ObjC interop.
 
-use core::cell::{OnceCell, RefCell};
+use core::cell::{Cell, OnceCell, RefCell};
 use core::ptr;
 
 use objc2::rc::{Allocated, Retained};
@@ -16,19 +17,33 @@ use objc2_core_graphics::{
 };
 use objc2_foundation::{NSDictionary, NSObject, NSObjectProtocol, NSString};
 use objc2_ui_kit::{
-    UIApplication, UIApplicationDelegate, UIApplicationLaunchOptionsKey, UIColor, UIScreen,
+    UIApplication, UIApplicationDelegate, UIApplicationLaunchOptionsKey, UIColor, UIScreen, UIView,
     UIViewController, UIWindow,
 };
 
-use crate::Frame;
+use crate::{Frame, SafeAreaInsets};
 
-type DrawFn = Box<dyn FnOnce(&mut Frame)>;
+type DrawFn = Box<dyn FnMut(&mut Frame)>;
+
+/// The viewport metrics one frame was rendered at. UIKit fires layout
+/// passes liberally; memoizing the last snapshot keeps identical passes
+/// from re-rastering the same frame (ADR 004).
+#[derive(Clone, Copy, PartialEq)]
+struct Metrics {
+    width: u32,
+    height: u32,
+    scale: f64,
+    safe_area: SafeAreaInsets,
+}
 
 thread_local! {
-    /// Parked here by `run()` until UIKit delivers `didFinishLaunching`.
-    /// A thread-local (not a static) works because both ends are the main
-    /// thread: `run()` asserts it, and UIKit guarantees it for delegates.
+    /// Parked here by `run()`; invoked on every metrics change for the
+    /// app's whole life. A thread-local (not a static) works because both
+    /// ends are the main thread: `run()` asserts it, and UIKit guarantees
+    /// it for delegate and view-controller callbacks.
     static DRAW: RefCell<Option<DrawFn>> = const { RefCell::new(None) };
+    /// Metrics of the most recently presented frame.
+    static LAST_METRICS: Cell<Option<Metrics>> = const { Cell::new(None) };
 }
 
 /// Rust state attached to the delegate object. UIKit does not retain the key
@@ -62,7 +77,7 @@ define_class!(
 
     unsafe impl UIApplicationDelegate for AppDelegate {
         // The launch hook. Same job as Flutter's FlutterAppDelegate: create a
-        // screen-sized window, install a root view controller, make it key.
+        // screen-sized window, install the root view controller, make it key.
         #[unsafe(method(application:didFinishLaunchingWithOptions:))]
         fn did_finish_launching(
             &self,
@@ -82,36 +97,15 @@ define_class!(
                 UIWindow::initWithFrame(UIWindow::alloc(mtm), frame)
             };
 
-            let root = UIViewController::new(mtm);
+            // No drawing here (that was 003): the first layout pass after
+            // `makeKeyAndVisible` reaches `viewDidLayoutSubviews`, which
+            // renders the first frame — the same path rotation takes.
+            let root = ViewController::new(mtm);
             let root_view = root
                 .view()
                 .expect("view controller loads its view on first access");
             root_view.setBackgroundColor(Some(&UIColor::whiteColor()));
             window.setRootViewController(Some(&root));
-
-            // CPU-raster presentation (ADR 003): the app draws one frame into
-            // a pixel buffer; Core Animation shows it as the root layer's
-            // contents. Sized in logical points — scale factor is feature 004.
-            let bounds = window.bounds();
-            let width = bounds.size.width as u32;
-            let height = bounds.size.height as u32;
-            let mut frame = Frame {
-                width,
-                height,
-                pixels: vec![0; width as usize * height as usize * 4],
-            };
-            let draw = DRAW
-                .with_borrow_mut(Option::take)
-                .expect("run() parks the draw callback before UIKit launches");
-            draw(&mut frame);
-
-            let image = cg_image_from(&frame);
-            let contents: &CFType = &image;
-            // SAFETY: `contents` accepts a CGImage (CALayer docs); CF types
-            // are toll-free bridgeable to ObjC objects, which is exactly what
-            // `CFType: AsRef<AnyObject>` encodes.
-            unsafe { root_view.layer().setContents(Some(contents.as_ref())) };
-
             window.makeKeyAndVisible();
 
             if self.ivars().window.set(window).is_err() {
@@ -122,8 +116,112 @@ define_class!(
     }
 );
 
+define_class!(
+    // SAFETY: `UIViewController` has no subclassing requirements beyond
+    // main-thread use (encoded by `MainThreadOnly`), and `ViewController`
+    // does not implement `Drop`.
+    #[unsafe(super(UIViewController))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "MelViewController"]
+    struct ViewController;
+
+    unsafe impl NSObjectProtocol for ViewController {}
+
+    impl ViewController {
+        // The render trigger (ADR 004, mirroring FlutterViewController):
+        // UIKit calls this whenever the view's bounds were (re)laid out —
+        // first display, rotation, safe-area changes — the one place all
+        // viewport metrics are current.
+        #[unsafe(method(viewDidLayoutSubviews))]
+        fn view_did_layout_subviews(&self) {
+            // SAFETY: plain forward to `UIViewController`'s implementation
+            // (documented to do nothing, called for protocol hygiene).
+            let _: () = unsafe { msg_send![super(self), viewDidLayoutSubviews] };
+            let view = self
+                .view()
+                .expect("viewDidLayoutSubviews implies the view is loaded");
+            present(&view);
+        }
+    }
+);
+
+impl ViewController {
+    fn new(mtm: MainThreadMarker) -> Retained<Self> {
+        // SAFETY: plain forward to `UIViewController`'s `init`; the subclass
+        // adds no ivars that would need initializing first.
+        unsafe { msg_send![Self::alloc(mtm), init] }
+    }
+}
+
+/// The single render path: reads the view's current metrics, has the app
+/// draw a frame at them, and installs it as the view's layer contents.
+fn present(view: &UIView) {
+    let Some(window) = view.window() else {
+        // Not attached to a window: nothing on screen to present to.
+        return;
+    };
+    let bounds = view.bounds();
+    // The screen's scale (2×/3×): physical pixels per logical point. Not
+    // `view.contentScaleFactor` — that mirrors the layer's `contentsScale`,
+    // which UIKit leaves at 1.0 for layers it never draws into (ADR 004).
+    let scale = window.screen().scale();
+    let insets = view.safeAreaInsets();
+
+    // The buffer lives in physical pixels — logical points × scale
+    // (Flutter's devicePixelRatio). Rounding: logical sizes on real devices
+    // multiply to whole pixels; anything else is a UIKit rounding artifact.
+    let width = (bounds.size.width * scale).round() as u32;
+    let height = (bounds.size.height * scale).round() as u32;
+    if width == 0 || height == 0 {
+        // Degenerate mid-transition layout; a real pass follows.
+        return;
+    }
+
+    let safe_area = SafeAreaInsets {
+        left: insets.left,
+        top: insets.top,
+        right: insets.right,
+        bottom: insets.bottom,
+    };
+    let metrics = Metrics {
+        width,
+        height,
+        scale,
+        safe_area,
+    };
+    if LAST_METRICS.get() == Some(metrics) {
+        return;
+    }
+    LAST_METRICS.set(Some(metrics));
+
+    let mut frame = Frame {
+        width,
+        height,
+        scale,
+        safe_area,
+        pixels: vec![0; width as usize * height as usize * 4],
+    };
+    DRAW.with_borrow_mut(|draw| {
+        let draw = draw
+            .as_mut()
+            .expect("run() parks the draw callback before UIKit launches");
+        draw(&mut frame);
+    });
+
+    let image = cg_image_from(&frame);
+    let layer = view.layer();
+    // The image is physical-pixel-sized; telling the layer its scale makes
+    // Core Animation composite it 1:1 instead of resampling (ADR 004).
+    layer.setContentsScale(scale);
+    let contents: &CFType = &image;
+    // SAFETY: `contents` accepts a CGImage (CALayer docs); CF types are
+    // toll-free bridgeable to ObjC objects, which is exactly what
+    // `CFType: AsRef<AnyObject>` encodes.
+    unsafe { layer.setContents(Some(contents.as_ref())) };
+}
+
 /// Wraps a drawn frame into a `CGImage` for Core Animation. Copies the
-/// buffer into a `CFData` — fine for one launch-time frame; presentation
+/// buffer into a `CFData` — fine at metrics-change frequency; presentation
 /// cost is revisited with the frame loop (005) and the GPU decision (008).
 fn cg_image_from(frame: &Frame) -> CFRetained<CGImage> {
     let data = CFData::from_bytes(frame.pixels());
@@ -142,11 +240,11 @@ fn cg_image_from(frame: &Frame) -> CFRetained<CGImage> {
     // and the provider keeps its copy of the bytes alive for the image.
     unsafe {
         CGImage::new(
-            frame.width() as usize,
-            frame.height() as usize,
+            frame.physical_width() as usize,
+            frame.physical_height() as usize,
             8,  // bits per component
             32, // bits per pixel
-            frame.width() as usize * 4,
+            frame.physical_width() as usize * 4,
             Some(&space),
             bitmap_info,
             Some(&provider),

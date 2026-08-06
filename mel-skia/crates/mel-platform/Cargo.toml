@@ -30,6 +30,7 @@ objc2-ui-kit = { version = "0.3", default-features = false, features = [
     "UIViewController",
     "UIScreen",
     "UIColor",
+    "UIGeometry", # UIEdgeInsets, returned by safeAreaInsets (feature 004)
 ] }
 # CPU-raster presentation (ADR 003): the drawn pixel buffer becomes a CGImage
 # assigned to the root view's CALayer contents.
@@ -65,3 +66,7 @@ path = "../../examples/002_blank_app.rs"
 [[example]]
 name = "003_skia_surface"
 path = "../../examples/003_skia_surface.rs"
+
+[[example]]
+name = "004_scale_rotation"
+path = "../../examples/004_scale_rotation.rs"

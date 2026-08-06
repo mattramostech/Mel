@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-08-05, after feature 003._
+_Last updated: 2026-08-06, feature 004 built, pending review._
 
 ---
 
@@ -21,31 +21,34 @@ _Last updated: 2026-08-05, after feature 003._
 
 - **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
   app), 003 (Skia surface on screen).
-- **Next up:** 004 — Scale factor, safe areas & rotation.
+- **In progress:** 004 — Scale factor, safe areas & rotation (built, pending
+  review).
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene` — see [DEBT.md](../DEBT.md)).
 
 ## 2. What runs today
 
 ```sh
-scripts/run-sim.sh 003_skia_surface   # or: make run
+scripts/run-sim.sh 004_scale_rotation   # or: make run
 ```
 
-launches a full-screen solid honey color on the iOS Simulator, rasterized by
-a **Skia canvas on the CPU** (ADR 003): the example's draw callback fills a
-BGRA pixel buffer via `mel_painting::fill`, and the shell presents it as the
-root `CALayer`'s contents (`CGImage`). Still a pure-Rust UIKit app (no Xcode
-project, no Swift, no winit). The frame is drawn **once at launch** — no
-redraw loop (005), no scale-factor handling (004). `002_blank_app` still runs
-and shows the pre-Skia blank white shell.
+launches a honey background with a 100-logical-point espresso square pinned
+to the safe area's top-left corner, rasterized by a **Skia canvas on the
+CPU** (ADR 003) into a **physical-pixel** buffer (ADR 004 — 300 px wide at
+3×). Rotating the Simulator (Cmd+←/→) re-renders at the new metrics: the
+square stays square, the insets follow the notch, the console prints each
+snapshot. Still a pure-Rust UIKit app (no Xcode project, no Swift, no
+winit). Frames render **only when the viewport metrics change** — the
+redraw-on-demand loop is 005. `002_blank_app` and `003_skia_surface` still
+run as regression checks.
 
 ## 3. Repository map (real vs. placeholder)
 
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001 (layout) · 002 (app shell) · 003 (Skia surface)
+├── DECISIONS/            001 (layout) · 002 (app shell) · 003 (Skia surface) · 004 (scale/insets/rotation)
 ├── DEBT.md               one open item (002-1)
-├── examples/             002_blank_app.rs · 003_skia_surface.rs + README
+├── examples/             002_blank_app.rs · 003_skia_surface.rs · 004_scale_rotation.rs + README
 ├── scripts/run-sim.sh    the one-command Simulator flow (ADR 002)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
@@ -55,12 +58,12 @@ mel-skia/
 | Crate | Layer (CONTEXT.md §5) | State |
 | --- | --- | --- |
 | `mel-foundation` | geometry, color, ids | empty placeholder |
-| `mel-painting` | Canvas/Paint over Skia — the only crate ever allowed `skia-safe` | **bootstrap `fill()` (003)** — see §5 |
+| `mel-painting` | Canvas/Paint over Skia — the only crate ever allowed `skia-safe` | **bootstraps `fill()` (003) + `fill_rect()` (004)** — see §5 |
 | `mel-compositing` | layer tree, scenes | empty placeholder |
 | `mel-scheduling` | frame pipeline, tickers | empty placeholder |
 | `mel-rendering` | RenderObject, layout | empty placeholder |
 | `mel-widgets` | Widget/Element trees | empty placeholder |
-| `mel-platform` | iOS app shell | **implemented (002, 003)** — see §4 |
+| `mel-platform` | iOS app shell | **implemented (002–004)** — see §4 |
 
 Inter-crate dependency edges are added only when a feature first needs them.
 Exactly one exists: `mel-platform` → `mel-painting` as a **dev-dependency**
@@ -68,36 +71,43 @@ Exactly one exists: `mel-platform` → `mel-painting` as a **dev-dependency**
 themselves still have zero edges, and `cargo tree -i skia-safe` shows Skia
 confined to `mel-painting`.
 
-## 4. `mel-platform` — the app shell (features 002–003)
+## 4. `mel-platform` — the app shell (features 002–004)
 
 Public API — this is everything layers above can see:
 
 ```rust
 // iOS-only (#[cfg(target_os = "ios")]):
-mel_platform::run(draw: impl FnOnce(&mut Frame) + 'static) -> !
+mel_platform::run(draw: impl FnMut(&mut Frame) + 'static) -> !
 
-pub struct Frame { /* width/height (logical points) + BGRA byte buffer */ }
+pub struct SafeAreaInsets { pub left/top/right/bottom: f64 } // logical points
+
+pub struct Frame { /* physical-pixel BGRA buffer + viewport metrics */ }
 impl Frame {
-    pub fn width(&self) -> u32;
-    pub fn height(&self) -> u32;
+    pub fn physical_width(&self) -> u32;   // buffer dimensions
+    pub fn physical_height(&self) -> u32;
+    pub fn scale_factor(&self) -> f64;     // Flutter's devicePixelRatio
+    pub fn logical_width(&self) -> f64;    // physical ÷ scale
+    pub fn logical_height(&self) -> f64;
+    pub fn safe_area(&self) -> SafeAreaInsets;
     pub fn pixels(&self) -> &[u8];
     pub fn pixels_mut(&mut self) -> &mut [u8]; // BGRA8888, premul, stride = w*4
 }
 ```
 
 - [`src/lib.rs`](../crates/mel-platform/src/lib.rs) — the API above; no UIKit
-  type leaks upward (CONTEXT.md §5). `Frame` documents the pixel contract;
-  `mel_painting::fill`'s tests pin the same contract down.
+  type leaks upward (CONTEXT.md §5). `Frame` carries the viewport metrics it
+  was sized for (ADR 004); `mel_painting`'s tests pin the pixel contract.
 - [`src/ios.rs`](../crates/mel-platform/src/ios.rs) — the only file that
-  speaks Objective-C. `define_class!` registers `MelAppDelegate`
-  (an `NSObject` + `UIApplicationDelegate` implemented in Rust); `run()`
-  parks the draw callback in a main-thread `thread_local` and calls
-  `UIApplicationMain`, which never returns; the launch callback creates a
-  screen-sized `UIWindow` + root `UIViewController` (white background),
-  allocates the `Frame`, invokes the app's draw callback, wraps the bytes in
-  a `CGImage` and sets it as the root view's `layer.contents` (CPU raster —
-  ADR 003), then stores the window in the delegate's ivars (UIKit does not
-  retain the key window). One frame at launch; the loop is feature 005.
+  speaks Objective-C. `define_class!` registers two Rust-implemented classes:
+  `MelAppDelegate` (creates the `UIWindow`, installs the root VC, keeps the
+  window alive in its ivars) and `MelViewController`, whose
+  `viewDidLayoutSubviews` is the **single render trigger** (ADR 004,
+  mirroring Flutter): first display, rotation and safe-area changes all read
+  bounds × `contentScaleFactor` + `safeAreaInsets`, raster a physical-pixel
+  `Frame` through the app's `FnMut` callback (parked in a main-thread
+  `thread_local` by `run()`), and present it as the layer's contents with
+  `contentsScale` set (CPU raster — ADR 003). A memoized metrics snapshot
+  skips redundant layout passes. Redraw _without_ a metrics change is 005.
 - **Lifecycle model:** classic `UIApplicationDelegate`/`UIWindow`, _not_
   scene-based (`UIScene`) — debt 002-1, re-evaluated at 008. The
   `#[expect(deprecated)]` on `UIScreen::mainScreen` / `UIWindow::initWithFrame`
@@ -116,18 +126,21 @@ with an explicit `path`. Each example guards `main` with
 `#[cfg(target_os = "ios")]` plus a host-side stub so workspace-wide
 clippy/test stay green on the Mac.
 
-## 5. `mel-painting` — bootstrap Skia raster (feature 003)
+## 5. `mel-painting` — bootstrap Skia raster (features 003–004)
 
-One function, deliberately temporary until Phase 2's real Canvas/Paint:
+Two functions, deliberately temporary until Phase 2's real Canvas/Paint:
 
 ```rust
 mel_painting::fill(pixels: &mut [u8], width: u32, height: u32, color: [f32; 4])
+mel_painting::fill_rect(pixels, width, height, rect: [f32; 4] /* x,y,w,h */, color)
 ```
 
-wraps the caller's buffer in a Skia raster surface (`surfaces::wrap_pixels`,
-`BGRA8888` + premultiplied alpha) and clears it through a Skia canvas. No
-Skia type appears in the signature. Unit-tested on the host (byte order,
-premultiplication, size validation) — the project's first unit tests.
+Both wrap the caller's buffer in a Skia raster surface
+(`surfaces::wrap_pixels`, `BGRA8888` + premultiplied alpha) and draw through
+a Skia canvas: `fill` clears everything, `fill_rect` fills one sub-rectangle
+(clipped to the buffer, anti-aliasing off so edges are measurable — ADR
+004). No Skia type appears in the signatures. Unit-tested on the host (byte
+order, premultiplication, clipping, size validation).
 
 ## 6. Build, check & run flows
 
@@ -143,7 +156,7 @@ iOS (the shell code only compiles for iOS targets):
 
 ```sh
 cargo clippy --target aarch64-apple-ios-sim -p mel-platform --all-targets -- -D warnings
-cargo build --target aarch64-apple-ios -p mel-platform --example 003_skia_surface
+cargo build --target aarch64-apple-ios -p mel-platform --example 004_scale_rotation
 ```
 
 First builds are slow: `skia-safe` downloads prebuilt Skia binaries per
@@ -175,30 +188,35 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   Painting/platform stay decoupled — they share only a documented, tested
   pixel-format contract; the sole inter-crate edge is a dev-dependency for
   examples.
+- **ADR 004** — `viewDidLayoutSubviews` on a Mel-owned root view controller
+  is the single render trigger (launch, rotation, safe-area changes); the
+  buffer is physical-pixel-sized with `layer.contentsScale` set (no
+  resampling); `Frame` names its units (`physical_*`/`logical_*`/
+  `scale_factor`); `SafeAreaInsets` is a platform-owned carrier in logical
+  points, absorbed by Phase 1's `EdgeInsets` (014) later.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
 ## 8. What does NOT exist yet — don't assume it does
 
-- No GPU/Metal rendering: 003 is CPU raster, drawn **once at launch** into a
-  logical-points-sized buffer (no `contentScaleFactor` handling — on a 3×
-  screen the image is upscaled; invisible for a solid color, fixed in 004).
+- No GPU/Metal rendering: still CPU raster (ADR 003), re-rendered only when
+  the viewport metrics change — there is no way to request a repaint (005)
+  and no frame timestamps (006).
 - No display link / frame loop (005–006), no touch input (007), no
   lifecycle/background hooks (008), no real-device or codesigning flow (009).
-- No Mel `Canvas`/`Paint`/`Color` types — `fill()` is the entire painting
-  API until Phase 2; five of the seven crates are still empty.
+- No Mel `Canvas`/`Paint`/`Color` types — `fill()`/`fill_rect()` are the
+  entire painting API until Phase 2; five of the seven crates are still
+  empty.
 - No logging/debug tooling beyond `println!` through the attached console.
 
 ## 9. Where the next features land
 
-- **004 — Scale factor, safe areas & rotation:** `mel-platform/src/ios.rs`
-  grows `contentScaleFactor` handling (physical-pixel buffers), safe-area
-  inset queries, and surface recreation on size change; `Frame` learns the
-  logical-vs-physical distinction.
 - **005 (display link), 007 (touches), 008 (lifecycle + GPU decision —
-  revisit ADR 003's CPU raster):** all live in `mel-platform`'s `ios`
-  module, translating UIKit concepts into Mel types (which will start
-  populating `mel-foundation` from Phase 1).
+  revisit ADR 003's CPU raster and 004's per-present copies):** all live in
+  `mel-platform`'s `ios` module, translating UIKit concepts into Mel types
+  (which will start populating `mel-foundation` from Phase 1). 005 evolves
+  the 004 render path from render-on-metrics-change to render-on-request
+  (pausing when idle).
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 

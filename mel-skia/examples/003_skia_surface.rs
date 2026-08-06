@@ -10,7 +10,7 @@
 #[cfg(target_os = "ios")]
 fn main() -> ! {
     mel_platform::run(|frame| {
-        let (width, height) = (frame.width(), frame.height());
+        let (width, height) = (frame.physical_width(), frame.physical_height());
         // Honey (#FFC107). If the whole screen turns this color, the pixels
         // travelled Skia canvas → BGRA buffer → CGImage → CALayer.
         mel_painting::fill(frame.pixels_mut(), width, height, [1.0, 0.757, 0.027, 1.0]);

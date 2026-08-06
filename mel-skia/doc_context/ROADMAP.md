@@ -29,7 +29,7 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
   `CAMetalLayer` if 002's shell makes that the path of least resistance —
   record which and why).
   *Done when:* the Simulator shows a solid color drawn via a Skia canvas.
-- [ ] **004 — Scale factor, safe areas & rotation** — contentScaleFactor
+- [~] **004 — Scale factor, safe areas & rotation** — contentScaleFactor
   (logical vs. physical pixels — Flutter's devicePixelRatio), expose safe-area
   insets, survive rotation/size changes with surface recreation.
   *Done when:* a 100px square measures 100 logical px on a 3× device; rotating never crashes/stretches; insets are queryable.
