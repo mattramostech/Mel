@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-08-06, after feature 004._
+_Last updated: 2026-08-06, after building feature 005 (pending review)._
 
 ---
 
@@ -22,33 +22,37 @@ _Last updated: 2026-08-06, after feature 004._
 - **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
   app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
   rotation).
-- **Next up:** 005 — Redraw-on-demand loop.
+- **In progress:** 005 — Redraw-on-demand loop (built, pending review).
+- **Next up:** 006 — Frame timing.
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene` — see [DEBT.md](../DEBT.md)).
 
 ## 2. What runs today
 
 ```sh
-scripts/run-sim.sh 004_scale_rotation   # or: make run
+scripts/run-sim.sh 005_redraw_on_demand   # or: make run
 ```
 
 launches a honey background with a 100-logical-point espresso square pinned
 to the safe area's top-left corner, rasterized by a **Skia canvas on the
 CPU** (ADR 003) into a **physical-pixel** buffer (ADR 004 — 300 px wide at
-3×). Rotating the Simulator (Cmd+←/→) re-renders at the new metrics: the
-square stays square, the insets follow the notch, the console prints each
-snapshot. Still a pure-Rust UIKit app (no Xcode project, no Swift, no
-winit). Frames render **only when the viewport metrics change** — the
-redraw-on-demand loop is 005. `002_blank_app` and `003_skia_surface` still
-run as regression checks.
+3×). Frames exist **only on demand** (ADR 005): a paused `CADisplayLink`
+is unpaused by `request_frame()`, ticks once, repauses, draws, presents —
+idle means 0 display-link ticks and ~0% CPU. Tapping the screen cycles the
+background color through exactly one repaint per tap (the console numbers
+every draw); rotating the Simulator (Cmd+←/→) re-renders through the same
+request path: the square stays square, the insets follow the notch. Still a
+pure-Rust UIKit app (no Xcode project, no Swift, no winit).
+`002_blank_app`, `003_skia_surface` and `004_scale_rotation` still run as
+regression checks.
 
 ## 3. Repository map (real vs. placeholder)
 
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001 (layout) · 002 (app shell) · 003 (Skia surface) · 004 (scale/insets/rotation)
+├── DECISIONS/            001 (layout) · 002 (app shell) · 003 (Skia surface) · 004 (scale/insets/rotation) · 005 (redraw on demand)
 ├── DEBT.md               one open item (002-1)
-├── examples/             002_blank_app.rs · 003_skia_surface.rs · 004_scale_rotation.rs + README
+├── examples/             002_blank_app.rs · 003_skia_surface.rs · 004_scale_rotation.rs · 005_redraw_on_demand.rs + README
 ├── scripts/run-sim.sh    the one-command Simulator flow (ADR 002)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
@@ -63,7 +67,7 @@ mel-skia/
 | `mel-scheduling` | frame pipeline, tickers | empty placeholder |
 | `mel-rendering` | RenderObject, layout | empty placeholder |
 | `mel-widgets` | Widget/Element trees | empty placeholder |
-| `mel-platform` | iOS app shell | **implemented (002–004)** — see §4 |
+| `mel-platform` | iOS app shell | **implemented (002–005)** — see §4 |
 
 Inter-crate dependency edges are added only when a feature first needs them.
 Exactly one exists: `mel-platform` → `mel-painting` as a **dev-dependency**
@@ -71,13 +75,21 @@ Exactly one exists: `mel-platform` → `mel-painting` as a **dev-dependency**
 themselves still have zero edges, and `cargo tree -i skia-safe` shows Skia
 confined to `mel-painting`.
 
-## 4. `mel-platform` — the app shell (features 002–004)
+## 4. `mel-platform` — the app shell (features 002–005)
 
 Public API — this is everything layers above can see:
 
 ```rust
+pub trait App {                                // the platform↔app seam (ADR 005)
+    fn draw(&mut self, frame: &mut Frame);     // once per granted frame request
+    fn on_touch(&mut self) {}                  // touch-began; info-free stub until 007
+}
+
 // iOS-only (#[cfg(target_os = "ios")]):
-mel_platform::run(draw: impl FnMut(&mut Frame) + 'static) -> !
+mel_platform::run(app: impl App + 'static) -> !
+mel_platform::request_frame()                  // schedule exactly one draw at next vsync;
+                                               // idempotent until granted (coalesces);
+                                               // main-thread only
 
 pub struct SafeAreaInsets { pub left/top/right/bottom: f64 } // logical points
 
@@ -100,16 +112,20 @@ impl Frame {
 - [`src/ios.rs`](../crates/mel-platform/src/ios.rs) — the only file that
   speaks Objective-C. `define_class!` registers two Rust-implemented classes:
   `MelAppDelegate` (creates the `UIWindow`, installs the root VC, keeps the
-  window alive in its ivars) and `MelViewController`, whose
-  `viewDidLayoutSubviews` is the **single render trigger** (ADR 004,
-  mirroring Flutter): first display, rotation and safe-area changes all read
-  bounds × `window.screen.scale` + `safeAreaInsets` (not
-  `contentScaleFactor` — it stays 1.0 for views UIKit never draws into; see
-  ADR 004's Alternatives), raster a physical-pixel `Frame` through the app's `FnMut`
-  callback (parked in a main-thread `thread_local` by `run()`), and present
-  it as the layer's contents with `contentsScale` set (CPU raster — ADR
-  003). A memoized metrics snapshot skips redundant layout passes. Redraw
-  _without_ a metrics change is 005.
+  window alive in its ivars) and `MelViewController`, which owns the frame
+  loop (ADR 005, mirroring Flutter's `VsyncWaiterIOS`): a `CADisplayLink`
+  created **paused** in `viewDidLoad` (main run loop, common modes) is the
+  only path to the screen. Events _request_ frames — `viewDidLayoutSubviews`
+  (first display, rotation, safe-area changes) memoizes the metrics snapshot
+  and requests on change; `touchesBegan` forwards to `App::on_touch`, where
+  the app may call `request_frame()`. The tick (`onDisplayLink:`) repauses
+  first (so `draw` can re-request — continuous animation), re-reads bounds
+  × `window.screen.scale` + `safeAreaInsets` fresh (not `contentScaleFactor` —
+  it stays 1.0 for views UIKit never draws into; ADR 004's Alternatives),
+  rasters a physical-pixel `Frame` through `App::draw` (the app is parked in
+  a main-thread `thread_local` by `run()`), and presents it as the layer's
+  contents with `contentsScale` set (CPU raster — ADR 003). Idle = link
+  paused = zero ticks, zero CPU.
 - **Lifecycle model:** classic `UIApplicationDelegate`/`UIWindow`, _not_
   scene-based (`UIScene`) — debt 002-1, re-evaluated at 008. The
   `#[expect(deprecated)]` on `UIScreen::mainScreen` / `UIWindow::initWithFrame`
@@ -191,21 +207,32 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   pixel-format contract; the sole inter-crate edge is a dev-dependency for
   examples.
 - **ADR 004** — `viewDidLayoutSubviews` on a Mel-owned root view controller
-  is the single render trigger (launch, rotation, safe-area changes); the
-  buffer is physical-pixel-sized with `layer.contentsScale` set (no
-  resampling); `Frame` names its units (`physical_*`/`logical_*`/
-  `scale_factor`); `SafeAreaInsets` is a platform-owned carrier in logical
-  points, absorbed by Phase 1's `EdgeInsets` (014) later.
+  is the metrics source (launch, rotation, safe-area changes — since 005 it
+  requests frames instead of rendering them); the buffer is
+  physical-pixel-sized with `layer.contentsScale` set (no resampling);
+  `Frame` names its units (`physical_*`/`logical_*`/`scale_factor`);
+  `SafeAreaInsets` is a platform-owned carrier in logical points, absorbed
+  by Phase 1's `EdgeInsets` (014) later.
+- **ADR 005** — frames are pull-based through a paused `CADisplayLink`:
+  `request_frame()` unpauses, the tick repauses before drawing (so requests
+  coalesce and `draw` can re-request), and nothing presents synchronously
+  from an event callback. `run()` takes the `App` trait — the platform↔app
+  seam that 006 (timestamps), 007 (pointer events) and 008 (lifecycle)
+  extend; `App::on_touch` is an information-free touch-began stub that 007
+  replaces.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
 ## 8. What does NOT exist yet — don't assume it does
 
-- No GPU/Metal rendering: still CPU raster (ADR 003), re-rendered only when
-  the viewport metrics change — there is no way to request a repaint (005)
-  and no frame timestamps (006).
-- No display link / frame loop (005–006), no touch input (007), no
-  lifecycle/background hooks (008), no real-device or codesigning flow (009).
+- No GPU/Metal rendering: still CPU raster (ADR 003), one buffer alloc +
+  two copies per presented frame.
+- No frame timestamps (006): `draw` gets no timing information, so smooth
+  animation isn't possible yet — only event-driven repaints.
+- No real touch input (007): `App::on_touch` says only "a touch began" —
+  no position, no phase, no pointer IDs, no moved/ended/cancelled.
+- No lifecycle/background hooks (008), no real-device or codesigning flow
+  (009).
 - No Mel `Canvas`/`Paint`/`Color` types — `fill()`/`fill_rect()` are the
   entire painting API until Phase 2; five of the seven crates are still
   empty.
@@ -213,12 +240,14 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
 
 ## 9. Where the next features land
 
-- **005 (display link), 007 (touches), 008 (lifecycle + GPU decision —
-  revisit ADR 003's CPU raster and 004's per-present copies):** all live in
-  `mel-platform`'s `ios` module, translating UIKit concepts into Mel types
-  (which will start populating `mel-foundation` from Phase 1). 005 evolves
-  the 004 render path from render-on-metrics-change to render-on-request
-  (pausing when idle).
+- **006 (frame timing), 007 (touches), 008 (lifecycle + GPU decision —
+  revisit ADR 003's CPU raster and 004/005's per-present copies):** all live
+  in `mel-platform`'s `ios` module, translating UIKit concepts into Mel
+  types (which will start populating `mel-foundation` from Phase 1). 006
+  extends the display-link tick with `timestamp`/`targetTimestamp` through
+  the same `draw` callback; 007 replaces `App::on_touch` with Mel-typed
+  pointer events on the same trait; 008 pauses/resumes the link with the
+  app lifecycle.
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 

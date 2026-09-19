@@ -20,9 +20,10 @@ pub struct SafeAreaInsets {
 }
 
 /// The pixel buffer for one frame plus the viewport metrics it was sized
-/// for. The app draws into it, the shell presents it. Since feature 004 the
-/// draw callback runs once per *metrics change* — launch, rotation,
-/// safe-area change; the redraw-on-demand loop is feature 005.
+/// for. The app draws into it, the shell presents it. Since feature 005
+/// frames exist only on demand: one [`App::draw`] call per granted
+/// [`request_frame`], with metrics read fresh at the moment the frame is
+/// granted.
 ///
 /// Two coordinate spaces are in play (ADR 004), so every dimension names
 /// its unit:
@@ -86,16 +87,51 @@ impl Frame {
     }
 }
 
+/// The platform↔app seam: the shell calls in, the app draws and reacts.
+/// Implement it once per program and hand it to [`run`].
+///
+/// Frames are pull-based (ADR 005): the shell never draws on its own clock.
+/// Something — the shell on a metrics change, the app via [`request_frame`]
+/// — requests a frame, and at the next display refresh the shell calls
+/// [`draw`](Self::draw) exactly once and presents the result. No pending
+/// request, no callbacks, no CPU.
+pub trait App {
+    /// Draw one frame into `frame.pixels_mut()`; whatever is left there
+    /// goes on screen when this returns. Called once per granted frame
+    /// request, with the viewport metrics current at that instant. Calling
+    /// [`request_frame`] from inside is allowed and re-arms the loop —
+    /// that is how continuous animation works (timestamps arrive in 006).
+    fn draw(&mut self, frame: &mut Frame);
+
+    /// A finger touched the screen (UIKit's touch-began). Deliberately
+    /// information-free — no position, no pointer ID: it exists so an app
+    /// can answer "the user poked the screen" with [`request_frame`].
+    /// Feature 007 replaces it with real Mel-typed pointer events.
+    fn on_touch(&mut self) {}
+}
+
 /// Hands the calling thread to UIKit and runs the app. Never returns.
 ///
-/// Must be called from `main`, on the main thread. `draw` runs with a fresh
-/// [`Frame`] every time the viewport metrics change — at launch, on
-/// rotation, when the safe area moves — and whatever it left there goes on
-/// screen. No `Send` bound: the callback is parked and always invoked on
-/// this same (main) thread.
+/// Must be called from `main`, on the main thread. The shell requests the
+/// first frame itself once the viewport has a size, and again whenever the
+/// metrics change — launch, rotation, safe-area moves. Everything else
+/// repaints only when `app` asks (see [`request_frame`]). No `Send` bound:
+/// the app is parked and always invoked on this same (main) thread.
 #[cfg(target_os = "ios")]
-pub fn run(draw: impl FnMut(&mut Frame) + 'static) -> ! {
-    ios::run(Box::new(draw))
+pub fn run(app: impl App + 'static) -> ! {
+    ios::run(Box::new(app))
+}
+
+/// Schedules one [`App::draw`] at the next display refresh.
+///
+/// Idempotent until granted: any number of requests before the next vsync
+/// coalesce into a single draw (Flutter's `scheduleFrame` semantics).
+/// Callable from any `App` callback, including `draw` itself (continuous
+/// rendering). Main thread only — panics elsewhere. Before the shell is up
+/// it is a no-op: the launch layout pass always requests the first frame.
+#[cfg(target_os = "ios")]
+pub fn request_frame() {
+    ios::request_frame()
 }
 
 #[cfg(test)]

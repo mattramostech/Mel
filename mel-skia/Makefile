@@ -5,7 +5,7 @@
 #   make run EXAMPLE=002_blank_app   # a specific example
 #   make check                       # everything reviews require to be green
 
-EXAMPLE ?= 004_scale_rotation
+EXAMPLE ?= 005_redraw_on_demand
 
 .PHONY: run check
 

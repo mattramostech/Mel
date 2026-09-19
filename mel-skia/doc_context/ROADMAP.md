@@ -33,7 +33,7 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
   (logical vs. physical pixels — Flutter's devicePixelRatio), expose safe-area
   insets, survive rotation/size changes with surface recreation.
   *Done when:* a 100px square measures 100 logical px on a 3× device; rotating never crashes/stretches; insets are queryable.
-- [ ] **005 — Redraw-on-demand loop** — CADisplayLink-driven, but paint only
+- [~] **005 — Redraw-on-demand loop** — CADisplayLink-driven, but paint only
   when a frame was requested (pause the link when idle); clean separation
   `Platform events → App callback → Present`.
   *Done when:* CPU sits near 0% when idle; a tap triggers exactly one repaint.

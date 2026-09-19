@@ -18,6 +18,8 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSObject",
     "NSString",
     "NSDictionary",
+    "NSSet",     # touchesBegan's NSSet<UITouch> (feature 005)
+    "NSRunLoop", # main run loop + common modes, hosting the display link (feature 005)
 ] }
 objc2-ui-kit = { version = "0.3", default-features = false, features = [
     "std",
@@ -31,6 +33,8 @@ objc2-ui-kit = { version = "0.3", default-features = false, features = [
     "UIScreen",
     "UIColor",
     "UIGeometry", # UIEdgeInsets, returned by safeAreaInsets (feature 004)
+    "UITouch",    # touch-began → App::on_touch stub (feature 005; real plumbing is 007)
+    "UIEvent",
 ] }
 # CPU-raster presentation (ADR 003): the drawn pixel buffer becomes a CGImage
 # assigned to the root view's CALayer contents.
@@ -49,6 +53,7 @@ objc2-quartz-core = { version = "0.3", default-features = false, features = [
     "std",
     "objc2-core-foundation",
     "CALayer",
+    "CADisplayLink", # the vsync channel behind request_frame (feature 005)
 ] }
 
 # Examples are app-level code sitting above every layer; this edge exists for
@@ -70,3 +75,7 @@ path = "../../examples/003_skia_surface.rs"
 [[example]]
 name = "004_scale_rotation"
 path = "../../examples/004_scale_rotation.rs"
+
+[[example]]
+name = "005_redraw_on_demand"
+path = "../../examples/005_redraw_on_demand.rs"
