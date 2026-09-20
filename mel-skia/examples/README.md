@@ -19,3 +19,6 @@ running). See [ADR 002](../DECISIONS/002-app-shell-blank-app.md).
 | # | Example | Shows |
 | --- | --- | --- |
 | 002 | `002_blank_app` | Blank white full-screen app from the pure-Rust UIKit shell |
+| 003 | `003_skia_surface` | Full-screen honey color rasterized by a Skia canvas (CPU raster) |
+| 004 | `004_scale_rotation` | 100-logical-pt square at the safe-area corner; survives rotation (Cmd+←/→) |
+| 005 | `005_redraw_on_demand` | Tap cycles the background via `request_frame()` — exactly one repaint per tap, ~0% CPU when idle |

@@ -18,10 +18,13 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSObject",
     "NSString",
     "NSDictionary",
+    "NSSet",     # touchesBegan's NSSet<UITouch> (feature 005)
+    "NSRunLoop", # main run loop + common modes, hosting the display link (feature 005)
 ] }
 objc2-ui-kit = { version = "0.3", default-features = false, features = [
     "std",
     "objc2-core-foundation",
+    "objc2-quartz-core",
     "UIResponder",
     "UIApplication",
     "UIWindow",
@@ -29,7 +32,34 @@ objc2-ui-kit = { version = "0.3", default-features = false, features = [
     "UIViewController",
     "UIScreen",
     "UIColor",
+    "UIGeometry", # UIEdgeInsets, returned by safeAreaInsets (feature 004)
+    "UITouch",    # touch-began → App::on_touch stub (feature 005; real plumbing is 007)
+    "UIEvent",
 ] }
+# CPU-raster presentation (ADR 003): the drawn pixel buffer becomes a CGImage
+# assigned to the root view's CALayer contents.
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2", # CFType → AnyObject bridging, used to hand a CGImage to CALayer
+    "CFData",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = [
+    "std",
+    "CGColorSpace",
+    "CGDataProvider",
+    "CGImage",
+] }
+objc2-quartz-core = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "CALayer",
+    "CADisplayLink", # the vsync channel behind request_frame (feature 005)
+] }
+
+# Examples are app-level code sitting above every layer; this edge exists for
+# them only, never for the library itself (ADR 003).
+[target.'cfg(target_os = "ios")'.dev-dependencies]
+mel-painting = { workspace = true }
 
 # Demo files live at the repo-convention location `examples/NNN_slug.rs`
 # (CONTEXT.md §6); this crate is their cargo host (ADR 002). Launch with
@@ -37,3 +67,15 @@ objc2-ui-kit = { version = "0.3", default-features = false, features = [
 [[example]]
 name = "002_blank_app"
 path = "../../examples/002_blank_app.rs"
+
+[[example]]
+name = "003_skia_surface"
+path = "../../examples/003_skia_surface.rs"
+
+[[example]]
+name = "004_scale_rotation"
+path = "../../examples/004_scale_rotation.rs"
+
+[[example]]
+name = "005_redraw_on_demand"
+path = "../../examples/005_redraw_on_demand.rs"

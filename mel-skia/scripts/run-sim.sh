@@ -50,6 +50,15 @@ cat > "$APP_DIR/Info.plist" <<PLIST
     <key>CFBundleSupportedPlatforms</key> <array><string>iPhoneSimulator</string></array>
     <key>MinimumOSVersion</key>          <string>15.0</string>
     <key>UILaunchScreen</key>            <dict/>
+    <!-- Rotation is part of the platform contract (feature 004): declare the
+         supported orientations explicitly instead of relying on UIKit's
+         all-but-upside-down default. -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
 </dict>
 </plist>
 PLIST
