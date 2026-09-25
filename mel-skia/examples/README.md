@@ -22,3 +22,16 @@ running). See [ADR 002](../DECISIONS/002-app-shell-blank-app.md).
 | 003 | `003_skia_surface` | Full-screen honey color rasterized by a Skia canvas (CPU raster) |
 | 004 | `004_scale_rotation` | 100-logical-pt square at the safe-area corner; survives rotation (Cmd+←/→) |
 | 005 | `005_redraw_on_demand` | Tap cycles the background via `request_frame()` — exactly one repaint per tap, ~0% CPU when idle |
+| 006 | `006_frame_timing` | Rectangle moves from display-link timestamps; sampled CPU cost vs. refresh interval and deadline; tap pauses/resumes |
+
+Feature 006: `make run` starts a four-second horizontal cycle inside the safe
+area. Check that the motion remains smooth after rotation; changing refresh
+rate or dropping frames must not change its period. Tap to pause (at most one
+pending frame finishes), wait for console silence, then tap to restart.
+The console samples CPU submission cost once per timestamp-second. A positive
+`deadline overrun` means submission missed the target, even if CPU cost is
+less than the interval. These debug/Simulator measurements include CPU raster
+and image copies, but do not measure actual on-screen presentation.
+
+Run the demo's deterministic motion tests on the host with:
+`cargo test -p mel-platform --example 006_frame_timing`.

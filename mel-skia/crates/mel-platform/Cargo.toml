@@ -53,6 +53,7 @@ objc2-quartz-core = { version = "0.3", default-features = false, features = [
     "std",
     "objc2-core-foundation",
     "CALayer",
+    "CABase", # CACurrentMediaTime: same clock as the display link (feature 006)
     "CADisplayLink", # the vsync channel behind request_frame (feature 005)
 ] }
 
@@ -79,3 +80,7 @@ path = "../../examples/004_scale_rotation.rs"
 [[example]]
 name = "005_redraw_on_demand"
 path = "../../examples/005_redraw_on_demand.rs"
+
+[[example]]
+name = "006_frame_timing"
+path = "../../examples/006_frame_timing.rs"

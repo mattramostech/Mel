@@ -6,6 +6,9 @@
 #[cfg(target_os = "ios")]
 mod ios;
 
+mod timing;
+pub use timing::{FrameTime, FrameTiming};
+
 /// The screen regions covered by system UI (notch, home indicator, status
 /// bar), in **logical points** — the safe area is where content is fully
 /// visible. A plain data carrier owned by the platform layer; Phase 1's
@@ -41,10 +44,16 @@ pub struct Frame {
     height: u32,
     scale: f64,
     safe_area: SafeAreaInsets,
+    time: FrameTime,
     pixels: Vec<u8>,
 }
 
 impl Frame {
+    /// Display-link timestamps shared by all work in this frame (ADR 006).
+    pub fn time(&self) -> FrameTime {
+        self.time
+    }
+
     /// Buffer width in physical pixels.
     pub fn physical_width(&self) -> u32 {
         self.width
@@ -100,8 +109,13 @@ pub trait App {
     /// goes on screen when this returns. Called once per granted frame
     /// request, with the viewport metrics current at that instant. Calling
     /// [`request_frame`] from inside is allowed and re-arms the loop —
-    /// that is how continuous animation works (timestamps arrive in 006).
+    /// that is how continuous animation works (use [`Frame::time`]).
     fn draw(&mut self, frame: &mut Frame);
+
+    /// Reports CPU submission cost after drawing and assigning layer
+    /// contents. Default: no-op. Runs on the main thread, outside the
+    /// measurement; keep it brief. May call [`request_frame`].
+    fn on_frame_timing(&mut self, _timing: FrameTiming) {}
 
     /// A finger touched the screen (UIKit's touch-began). Deliberately
     /// information-free — no position, no pointer ID: it exists so an app
@@ -136,7 +150,7 @@ pub fn request_frame() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Frame, SafeAreaInsets};
+    use super::{Frame, FrameTime, SafeAreaInsets};
 
     /// Logical size is derived, not stored: physical ÷ scale. 3× mirrors the
     /// devices the Simulator flow targets.
@@ -146,6 +160,7 @@ mod tests {
             width: 300,
             height: 750,
             scale: 3.0,
+            time: FrameTime::from_seconds(1.0, 1.016).unwrap(),
             safe_area: SafeAreaInsets {
                 left: 0.0,
                 top: 59.0,

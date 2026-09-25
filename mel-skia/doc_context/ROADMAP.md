@@ -33,11 +33,11 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
   (logical vs. physical pixels — Flutter's devicePixelRatio), expose safe-area
   insets, survive rotation/size changes with surface recreation.
   *Done when:* a 100px square measures 100 logical px on a 3× device; rotating never crashes/stretches; insets are queryable.
-- [~] **005 — Redraw-on-demand loop** — CADisplayLink-driven, but paint only
+- [x] **005 — Redraw-on-demand loop** — CADisplayLink-driven, but paint only
   when a frame was requested (pause the link when idle); clean separation
   `Platform events → App callback → Present`.
   *Done when:* CPU sits near 0% when idle; a tap triggers exactly one repaint.
-- [ ] **006 — Frame timing** — frame callback with the display-link timestamp
+- [~] **006 — Frame timing** — frame callback with the display-link timestamp
   (Flutter's `onBeginFrame`), measure and log frame duration vs. target.
   *Done when:* example animates a moving rectangle smoothly using timestamps only.
 - [ ] **007 — Touch input plumbing** — receive UITouch began/moved/ended/
@@ -407,7 +407,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 
 | Phase | Features | Done |
 | --- | --- | --- |
-| 0 — Platform Shell (iOS) | 9 | 4 |
+| 0 — Platform Shell (iOS) | 9 | 5 |
 | 1 — Foundation | 7 | 0 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
@@ -420,4 +420,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **4** |
+| **Total** | **99** | **5** |

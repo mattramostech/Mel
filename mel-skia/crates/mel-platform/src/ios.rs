@@ -21,13 +21,13 @@ use objc2_core_graphics::{
 use objc2_foundation::{
     NSDictionary, NSObject, NSObjectProtocol, NSRunLoop, NSRunLoopCommonModes, NSSet, NSString,
 };
-use objc2_quartz_core::CADisplayLink;
+use objc2_quartz_core::{CACurrentMediaTime, CADisplayLink};
 use objc2_ui_kit::{
     UIApplication, UIApplicationDelegate, UIApplicationLaunchOptionsKey, UIColor, UIEvent,
     UIScreen, UITouch, UIView, UIViewController, UIWindow,
 };
 
-use crate::{App, Frame, SafeAreaInsets};
+use crate::{App, Frame, FrameTime, FrameTiming, SafeAreaInsets};
 
 /// A viewport-metrics snapshot. UIKit fires layout passes liberally;
 /// memoizing the snapshot of the last *requested* frame keeps identical
@@ -228,11 +228,28 @@ define_class!(
         // (continuous animation) instead of having the request swallowed.
         #[unsafe(method(onDisplayLink:))]
         fn on_display_link(&self, link: &CADisplayLink) {
+            let start = CACurrentMediaTime();
             link.setPaused(true);
+            let Some(time) = FrameTime::from_seconds(link.timestamp(), link.targetTimestamp()) else {
+                // Do not fabricate animation time from an invalid tick.
+                LAST_METRICS.set(None);
+                return;
+            };
             let view = self
                 .view()
                 .expect("the display link only exists after viewDidLoad loaded the view");
-            render(&view);
+            if render(&view, time) {
+                let end = CACurrentMediaTime();
+                if let Some(timing) = FrameTiming::from_seconds(time, start, end) {
+                    // draw's APP borrow has ended; reporting may safely
+                    // mutate the same app and re-request the display link.
+                    APP.with_borrow_mut(|app| {
+                        app.as_mut()
+                            .expect("run() parks the app before UIKit launches")
+                            .on_frame_timing(timing);
+                    });
+                }
+            }
         }
     }
 );
@@ -282,13 +299,13 @@ fn current_metrics(view: &UIView) -> Option<Metrics> {
 /// reads the metrics *fresh* (never a request-time snapshot; the view may
 /// have changed between request and grant), has the app draw a frame at
 /// them, and installs it as the view's layer contents.
-fn render(view: &UIView) {
+fn render(view: &UIView, time: FrameTime) -> bool {
     let Some(metrics) = current_metrics(view) else {
         // Nothing to present to: the granted request is dropped. Clearing
         // the memo makes the next real layout pass re-request the frame
         // instead of memoizing it away.
         LAST_METRICS.set(None);
-        return;
+        return false;
     };
     let Metrics {
         width,
@@ -302,6 +319,7 @@ fn render(view: &UIView) {
         height,
         scale,
         safe_area,
+        time,
         pixels: vec![0; width as usize * height as usize * 4],
     };
     APP.with_borrow_mut(|app| {
@@ -321,6 +339,7 @@ fn render(view: &UIView) {
     // toll-free bridgeable to ObjC objects, which is exactly what
     // `CFType: AsRef<AnyObject>` encodes.
     unsafe { layer.setContents(Some(contents.as_ref())) };
+    true
 }
 
 /// Wraps a drawn frame into a `CGImage` for Core Animation. Copies the

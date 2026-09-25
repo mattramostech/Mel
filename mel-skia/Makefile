@@ -5,7 +5,7 @@
 #   make run EXAMPLE=002_blank_app   # a specific example
 #   make check                       # everything reviews require to be green
 
-EXAMPLE ?= 005_redraw_on_demand
+EXAMPLE ?= 006_frame_timing
 
 .PHONY: run check
 
@@ -17,4 +17,5 @@ check:
 	cargo fmt --all --check
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo test --workspace
+	cargo test -p mel-platform --example 006_frame_timing
 	cargo clippy --target aarch64-apple-ios-sim -p mel-platform --all-targets -- -D warnings
