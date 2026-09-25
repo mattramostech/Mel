@@ -40,7 +40,7 @@ pub struct PointerEvent {
 #[cfg(any(target_os = "ios", test))]
 #[derive(Default)]
 pub(crate) struct PointerTracker {
-    active: std::collections::HashMap<usize, PointerId>,
+    active: std::collections::HashMap<usize, PointerEvent>,
     last_id: u64,
 }
 
@@ -61,25 +61,71 @@ impl PointerTracker {
                     return None;
                 }
                 self.last_id = self.last_id.checked_add(1).expect("pointer IDs exhausted");
-                let id = PointerId(self.last_id);
-                self.active.insert(native, id);
-                id
+                PointerId(self.last_id)
             }
-            PointerPhase::Move => *self.active.get(&native)?,
-            PointerPhase::Up | PointerPhase::Cancel => self.active.remove(&native)?,
+            PointerPhase::Move => self.active.get(&native)?.id,
+            PointerPhase::Up | PointerPhase::Cancel => self.active.remove(&native)?.id,
         };
-        Some(PointerEvent {
+        let event = PointerEvent {
             id,
             phase,
             position,
             timestamp,
-        })
+        };
+        if matches!(phase, PointerPhase::Down | PointerPhase::Move) {
+            self.active.insert(native, event);
+        }
+        Some(event)
+    }
+
+    /// End interrupted contacts before notifying the app of suspension.
+    /// Draining first makes subsequent native terminal events harmless.
+    pub(crate) fn cancel_all(&mut self, timestamp: Duration) -> Vec<PointerEvent> {
+        self.active
+            .drain()
+            .map(|(_, last)| PointerEvent {
+                phase: PointerPhase::Cancel,
+                timestamp: timestamp.max(last.timestamp),
+                ..last
+            })
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interruption_cancels_all_at_last_positions_once_without_reusing_ids() {
+        let mut tracker = PointerTracker::default();
+        let a = sample(&mut tracker, 100, PointerPhase::Down).id;
+        let b = sample(&mut tracker, 200, PointerPhase::Down).id;
+        let position = PointerPosition { x: 12.5, y: -7.0 };
+        tracker.event(100, PointerPhase::Move, position, Duration::from_secs(2));
+        let mut cancelled = tracker.cancel_all(Duration::from_secs(3));
+        cancelled.sort_by_key(|event| event.id);
+        assert_eq!(cancelled.len(), 2);
+        assert_eq!(cancelled[0].id, a);
+        assert_eq!(cancelled[0].position, position);
+        assert_eq!(cancelled[1].id, b);
+        for event in cancelled {
+            assert_eq!(event.phase, PointerPhase::Cancel);
+            assert_eq!(event.timestamp, Duration::from_secs(3));
+        }
+        assert!(tracker.cancel_all(Duration::from_secs(4)).is_empty());
+        assert!(
+            tracker
+                .event(100, PointerPhase::Up, position, Duration::from_secs(4))
+                .is_none()
+        );
+        assert!(sample(&mut tracker, 100, PointerPhase::Down).id > b);
+        tracker.event(100, PointerPhase::Move, position, Duration::from_secs(8));
+        assert_eq!(
+            tracker.cancel_all(Duration::from_secs(7))[0].timestamp,
+            Duration::from_secs(8)
+        );
+    }
 
     fn sample(tracker: &mut PointerTracker, native: usize, phase: PointerPhase) -> PointerEvent {
         tracker

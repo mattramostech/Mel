@@ -12,6 +12,9 @@ pub use timing::{FrameTime, FrameTiming};
 mod pointer;
 pub use pointer::{PointerEvent, PointerId, PointerPhase, PointerPosition};
 
+mod lifecycle;
+pub use lifecycle::AppLifecycleState;
+
 /// The screen regions covered by system UI (notch, home indicator, status
 /// bar), in **logical points** — the safe area is where content is fully
 /// visible. A plain data carrier owned by the platform layer; Phase 1's
@@ -125,6 +128,19 @@ pub trait App {
     /// ID and logical viewport position. May call [`request_frame`]; input
     /// alone does not schedule drawing. No hit testing or gestures yet.
     fn on_pointer_event(&mut self, _event: PointerEvent) {}
+
+    /// Lifecycle changed, on the main thread. Initially Inactive; the first
+    /// Active is delivered after launch. Duplicate states are suppressed.
+    /// Drawing stops before leaving Active; outstanding contacts receive
+    /// Cancel before this callback. Activation schedules one fresh frame.
+    /// Timestamps keep advancing while suspended; reset animation origins
+    /// here if desired. May call [`request_frame`] in any state.
+    fn on_lifecycle_changed(&mut self, _state: AppLifecycleState) {}
+
+    /// The OS requests that disposable app resources be released. Default:
+    /// no-op. Independent of lifecycle; called on the main thread. Keep it
+    /// brief. A frame requested here waits until the app is Active.
+    fn on_memory_warning(&mut self) {}
 }
 
 /// Hands the calling thread to UIKit and runs the app. Never returns.
@@ -146,6 +162,8 @@ pub fn run(app: impl App + 'static) -> ! {
 /// Callable from any `App` callback, including `draw` itself (continuous
 /// rendering). Main thread only — panics elsewhere. Before the shell is up
 /// it is a no-op: the launch layout pass always requests the first frame.
+/// While Inactive/Background, requests coalesce without waking the display
+/// link. Activation resumes drawing and always requests a fresh frame.
 #[cfg(target_os = "ios")]
 pub fn request_frame() {
     ios::request_frame()

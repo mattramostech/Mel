@@ -106,6 +106,10 @@ frame is drawn **once at launch**; loop in **005**); GPU/Metal (**008**).
 
 ## Review outcome
 
+GPU decision follow-up: [ADR 008](008-app-lifecycle.md) retains CPU raster
+after evaluating Metal, with proposed debt 008-1 for hardware timing (009)
+and painting API design (020).
+
 Reviewed and approved 2026-08-05. Correctness ✅ · Architecture ✅ ·
 API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
 No debt items filed — the known limitations (logical-points buffer, single

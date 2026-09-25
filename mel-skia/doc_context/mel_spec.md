@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-09-25, after building feature 007 (pending review)._
+_Last updated: 2026-09-25, after building feature 008 (pending review)._
 
 ---
 
@@ -21,37 +21,39 @@ _Last updated: 2026-09-25, after building feature 007 (pending review)._
 
 - **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
   app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
-  rotation), 005 (redraw-on-demand loop), 006 (frame timing).
-- **In progress:** 007 — Touch input plumbing (built, pending review).
-- **Next up:** 008 — App lifecycle & Metal decision point.
-- **Open debt:** 002-1 (classic lifecycle vs `UIScene` — see [DEBT.md](../DEBT.md)).
+  rotation), 005 (redraw-on-demand loop), 006 (frame timing), 007 (touch input).
+- **In progress:** 008 — App lifecycle & Metal decision point (built, pending review).
+- **Next up:** 009 — Run on a real device.
+- **Open debt:** 002-1 (classic lifecycle vs `UIScene`) and proposed 008-1
+  (CPU raster retained — see [DEBT.md](../DEBT.md)).
 
 ## 2. What runs today
 
 ```sh
-scripts/run-sim.sh 007_touch_input   # or: make run
+scripts/run-sim.sh 008_app_lifecycle   # or: make run
 ```
 
-launches a honey background. Each active touch paints a 60-logical-point
-colored square centered at its position. The console logs Mel pointer ID,
-phase (Down/Move/Up/Cancel), logical position, monotonic timestamp, and active
-contact count. Hold Option while dragging in Simulator to exercise two
-contacts. IDs remain stable until Up/Cancel; a later contact gets a new ID.
-Squares disappear on Up/Cancel, and drawing stops when input stops.
+launches a honey background with a timestamp-driven moving square. Going
+Home pauses drawing before Inactive/Background callbacks; reopening emits
+Inactive/Active, repaints and restarts the demo's motion. Lifecycle logs show
+a frame counter that stays fixed while suspended. The demo deliberately
+requests frames in every lifecycle callback to verify they cannot bypass
+this gate. Memory warnings log a counter and toggle the background color.
 
-The app remains pure Rust/UIKit, CPU-rasterized through Skia. Frames exist
-only on demand (ADR 005); multiple input requests before vsync coalesce.
-Examples 002–006 remain runnable; 005 cycles color on Down and 006 toggles
-its timestamp-driven animation on Down. Rotation updates viewport metrics.
+The app remains pure Rust/UIKit, CPU-rasterized through Skia (ADR 008).
+Frames exist only on demand and while Active; requests coalesce and survive
+suspension. Each activation also schedules one fresh frame for static apps.
+Examples 002–007 remain runnable. Touch input is cancelled on interruption;
+late terminal events are ignored. Rotation updates viewport metrics.
 
 ## 3. Repository map (real vs. placeholder)
 
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001 (layout) · 002 (app shell) · 003 (Skia surface) · 004 (scale/insets/rotation) · 005 (redraw on demand) · 006 (frame timing) · 007 (touch input)
-├── DEBT.md               one open item (002-1)
-├── examples/             002_blank_app.rs · 003_skia_surface.rs · 004_scale_rotation.rs · 005_redraw_on_demand.rs · 006_frame_timing.rs · 007_touch_input.rs + README
+├── DECISIONS/            001 (layout) · 002 (app shell) · 003 (Skia surface) · 004 (scale/insets/rotation) · 005 (redraw on demand) · 006 (frame timing) · 007 (touch input) · 008 (lifecycle/GPU decision)
+├── DEBT.md               002-1 retained; 008-1 proposed
+├── examples/             002_blank_app.rs · 003_skia_surface.rs · 004_scale_rotation.rs · 005_redraw_on_demand.rs · 006_frame_timing.rs · 007_touch_input.rs · 008_app_lifecycle.rs + README
 ├── scripts/run-sim.sh    the one-command Simulator flow (ADR 002)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
@@ -66,7 +68,7 @@ mel-skia/
 | `mel-scheduling` | frame pipeline, tickers | empty placeholder |
 | `mel-rendering` | RenderObject, layout | empty placeholder |
 | `mel-widgets` | Widget/Element trees | empty placeholder |
-| `mel-platform` | iOS app shell | **implemented (002–007)** — see §4 |
+| `mel-platform` | iOS app shell | **implemented (002–008)** — see §4 |
 
 Inter-crate dependency edges are added only when a feature first needs them.
 Exactly one exists: `mel-platform` → `mel-painting` as a **dev-dependency**
@@ -74,7 +76,7 @@ Exactly one exists: `mel-platform` → `mel-painting` as a **dev-dependency**
 themselves still have zero edges, and `cargo tree -i skia-safe` shows Skia
 confined to `mel-painting`.
 
-## 4. `mel-platform` — the app shell (features 002–007)
+## 4. `mel-platform` — the app shell (features 002–008)
 
 Public API — this is everything layers above can see:
 
@@ -83,13 +85,18 @@ pub trait App {                                // the platform↔app seam (ADR 0
     fn draw(&mut self, frame: &mut Frame);     // once per granted frame request
     fn on_frame_timing(&mut self, timing: FrameTiming) {} // after CPU submission
     fn on_pointer_event(&mut self, event: PointerEvent) {} // changed touch (007)
+    fn on_lifecycle_changed(&mut self, state: AppLifecycleState) {} // transition (008)
+    fn on_memory_warning(&mut self) {} // release disposable app resources (008)
 }
 
 // iOS-only (#[cfg(target_os = "ios")]):
 mel_platform::run(app: impl App + 'static) -> !
 mel_platform::request_frame()                  // schedule exactly one draw at next vsync;
                                                // idempotent until granted (coalesces);
+                                               // deferred while inactive/background;
                                                // main-thread only
+
+pub enum AppLifecycleState { Active, Inactive, Background } // drawing only in Active
 
 pub struct PointerId(pub u64);                 // stable per contact, never reused
 pub enum PointerPhase { Down, Move, Up, Cancel }
@@ -141,7 +148,15 @@ impl Frame {
   monotonically increasing ID; Move preserves it; Up/Cancel releases it.
   Duplicate Down and orphan events are ignored. Positions are full-viewport
   logical points, including safe areas, with no clamping or scale conversion.
+  The tracker retains each last sample so interruption can drain all remaining
+  contacts into Cancel events at their last positions, with monotonic times.
   `PointerPosition` is a bootstrap carrier until Offset (010).
+- [`src/lifecycle.rs`](../crates/mel-platform/src/lifecycle.rs) — native-free
+  `AppLifecycleState` and private host-tested `FrameLoop`: pending requests
+  are independent of eligibility to draw. Initial Inactive blocks ticks;
+  activation requests a fresh frame, duplicate transitions do nothing, and
+  requests made while suspended stay pending. Grants clear pending work before
+  app callbacks, preserving re-request and coalescing semantics.
 - [`src/ios.rs`](../crates/mel-platform/src/ios.rs) — the only file that
   speaks Objective-C. `define_class!` registers two Rust-implemented classes:
   `MelAppDelegate` (creates the `UIWindow`, installs the root VC, keeps the
@@ -155,7 +170,7 @@ impl Frame {
   Native object addresses are private identity keys only. `locationInView`
   provides logical positions and UITouch's timestamp provides monotonic
   sample time. The app may call `request_frame()`. The tick (`onDisplayLink:`)
-  repauses
+  repauses and checks frame eligibility (including stale queued ticks)
   first (so `draw` can re-request — continuous animation), re-reads bounds
   × `window.screen.scale` + `safeAreaInsets` fresh (not `contentScaleFactor` —
   it stays 1.0 for views UIKit never draws into; ADR 004's Alternatives),
@@ -167,9 +182,14 @@ impl Frame {
   mutable borrow. CPU cost includes allocation/drawing/copies, excludes the
   reporting callback and actual compositor/display completion. Deadline
   overrun compares submission to `targetTimestamp`, so late ticks are visible
-  even when their CPU work fits the refresh interval. Idle = link paused.
+  even when their CPU work fits the refresh interval. Idle or inactive = link
+  paused. Application delegate hooks translate activation/resignation/background/
+  foreground into Mel states; suspension pauses before cancelling contacts and
+  notifying App. No tracker/frame-loop borrow spans app callbacks. Memory
+  warnings call `App::on_memory_warning` independently of lifecycle.
 - **Lifecycle model:** classic `UIApplicationDelegate`/`UIWindow`, _not_
-  scene-based (`UIScene`) — debt 002-1, re-evaluated at 008. The
+  scene-based (`UIScene`) — retained by ADR 008; debt 002-1 is re-deferred
+  to 009 and the Phase 0 gate for device/SDK compatibility. The
   `#[expect(deprecated)]` on `UIScreen::mainScreen` / `UIWindow::initWithFrame`
   is deliberate: those are scenes-era deprecations that don't apply to a
   scene-less app. Don't "fix" them independently of 002-1.
@@ -217,7 +237,7 @@ iOS (the shell code only compiles for iOS targets):
 
 ```sh
 cargo clippy --target aarch64-apple-ios-sim -p mel-platform --all-targets -- -D warnings
-cargo build --target aarch64-apple-ios -p mel-platform --example 007_touch_input
+cargo build --target aarch64-apple-ios -p mel-platform --example 008_app_lifecycle
 ```
 
 First builds are slow: `skia-safe` downloads prebuilt Skia binaries per
@@ -243,8 +263,8 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   winit; classic lifecycle (debt 002-1); one-command flow is a shell script
   (revisit xtask at 009/135); examples attach to `mel-platform`. Feature 009
   (real device) may reopen the Xcode-host question for codesigning.
-- **ADR 003** — CPU raster, no Metal yet (GPU decision deliberately deferred
-  to 008): app draws via `mel_painting::fill` into a shell-owned BGRA
+- **ADR 003** — CPU raster, no Metal yet (re-evaluated and retained by
+  ADR 008): app draws via `mel_painting::fill` into a shell-owned BGRA
   buffer; shell presents it as `CALayer.contents` through a `CGImage`.
   Painting/platform stay decoupled — they share only a documented, tested
   pixel-format contract; the sole inter-crate edge is a dev-dependency for
@@ -257,7 +277,7 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   `SafeAreaInsets` is a platform-owned carrier in logical points, absorbed
   by Phase 1's `EdgeInsets` (014) later.
 - **ADR 005** — frames are pull-based through a paused `CADisplayLink`:
-  `request_frame()` unpauses, the tick repauses before drawing (so requests
+  `request_frame()` unpauses while Active (008), the tick repauses before drawing (so requests
   coalesce and `draw` can re-request), and nothing presents synchronously
   from an event callback. `run()` takes the `App` trait — the platform↔app
   seam that 006 (timestamps), 007 (pointer events) and 008 (lifecycle)
@@ -271,6 +291,12 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   tracker translates native identities; no UIKit type crosses the API.
   Up/Cancel releases a contact independently; later Down gets a fresh ID.
   No hit testing, gestures, pressure, or predicted/coalesced samples yet.
+- **ADR 008** — Active/Inactive/Background plus a separate memory-warning
+  callback. Active-only rendering, suspension-safe pending requests, a fresh
+  frame on activation and cancellation of interrupted contacts. Retain CPU
+  raster based on current minimal-scene evidence; hardware timing (009) and
+  painting API design (020) revisit Metal. Classic lifecycle remains for this
+  single-window shell; 002-1 and proposed 008-1 capture the limits.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
@@ -280,8 +306,7 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   two copies per presented frame.
 - No hit testing, pointer target dispatch/capture (Phase 5), or gestures
   (Phase 8); touch events currently go directly to the App.
-- No lifecycle/background hooks (008), no real-device or codesigning flow
-  (009).
+- No real-device or codesigning flow (009), no UIScene support yet.
 - No Mel `Canvas`/`Paint`/`Color` types — `fill()`/`fill_rect()` are the
   entire painting API until Phase 2; five of the seven crates are still
   empty.
@@ -289,10 +314,9 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
 
 ## 9. Where the next features land
 
-- **008 (lifecycle + GPU decision):** hooks in `mel-platform`'s `ios`
-  module, translated into Mel types. Pause/resume the display link with the
-  app lifecycle; revisit classic lifecycle debt 002-1, ADR 003's CPU raster,
-  and 004/005's per-present copies using 006's timing measurements.
+- **009 (real device):** codesigning/deploy flow and example 006 on hardware.
+  Compare timing with Simulator; revisit retained CPU backend (008-1) and
+  classic lifecycle (002-1) against the chosen SDK/device before the phase gate.
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 

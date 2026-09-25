@@ -89,3 +89,7 @@ path = "../../examples/006_frame_timing.rs"
 [[example]]
 name = "007_touch_input"
 path = "../../examples/007_touch_input.rs"
+
+[[example]]
+name = "008_app_lifecycle"
+path = "../../examples/008_app_lifecycle.rs"

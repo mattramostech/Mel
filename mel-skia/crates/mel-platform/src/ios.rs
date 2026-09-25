@@ -27,8 +27,12 @@ use objc2_ui_kit::{
     UIScreen, UITouch, UIView, UIViewController, UIWindow,
 };
 
+use crate::lifecycle::FrameLoop;
 use crate::pointer::PointerTracker;
-use crate::{App, Frame, FrameTime, FrameTiming, PointerPhase, PointerPosition, SafeAreaInsets};
+use crate::{
+    App, AppLifecycleState, Frame, FrameTime, FrameTiming, PointerPhase, PointerPosition,
+    SafeAreaInsets,
+};
 
 /// A viewport-metrics snapshot. UIKit fires layout passes liberally;
 /// memoizing the snapshot of the last *requested* frame keeps identical
@@ -56,21 +60,53 @@ thread_local! {
     static DISPLAY_LINK: OnceCell<Retained<CADisplayLink>> = const { OnceCell::new() };
     /// Native identities stay inside the shell; only Mel IDs reach `App`.
     static POINTERS: RefCell<PointerTracker> = RefCell::new(PointerTracker::default());
+    static FRAME_LOOP: RefCell<FrameLoop> = RefCell::new(FrameLoop::default());
 }
 
-/// The request side of the loop — Flutter's `scheduleFrame`: unpause the
-/// link and let the next tick render. Setting `paused` is idempotent, so
-/// requests coalesce until granted, exactly the contract `lib.rs`
-/// documents. Must never call into `APP` (the caller may be mid-`draw`,
-/// holding the borrow).
+/// Request work without waking the link while suspended. Must never call
+/// into APP: the caller may be mid-draw, holding its mutable borrow.
 pub(crate) fn request_frame() {
     MainThreadMarker::new().expect("request_frame() must be called on the main thread");
     DISPLAY_LINK.with(|link| {
-        // No link yet means UIKit hasn't finished launching; the first
-        // layout pass always requests a frame, so nothing is lost.
-        if let Some(link) = link.get() {
-            link.setPaused(false);
+        if link.get().is_some() {
+            FRAME_LOOP.with_borrow_mut(FrameLoop::request);
         }
+    });
+    sync_display_link();
+}
+
+fn sync_display_link() {
+    let wants_tick = FRAME_LOOP.with_borrow(FrameLoop::wants_tick);
+    DISPLAY_LINK.with(|link| {
+        if let Some(link) = link.get() {
+            link.setPaused(!wants_tick);
+        }
+    });
+}
+
+fn lifecycle_changed(state: AppLifecycleState) {
+    if !FRAME_LOOP.with_borrow_mut(|frames| frames.transition(state)) {
+        return;
+    }
+    // Gate drawing before callbacks: even Cancel handlers may request it.
+    sync_display_link();
+    if state != AppLifecycleState::Active {
+        let timestamp = std::time::Duration::try_from_secs_f64(CACurrentMediaTime())
+            .expect("Core Animation time is finite, nonnegative uptime");
+        let cancelled = POINTERS.with_borrow_mut(|pointers| pointers.cancel_all(timestamp));
+        APP.with_borrow_mut(|app| {
+            let app = app
+                .as_mut()
+                .expect("run() parks the app before UIKit launches");
+            for event in cancelled {
+                app.on_pointer_event(event);
+            }
+        });
+    }
+    APP.with_borrow_mut(|app| {
+        app.as_mut()
+            .expect("run() parks the app before UIKit launches")
+            .on_lifecycle_changed(state);
     });
 }
 
@@ -104,6 +140,35 @@ define_class!(
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl UIApplicationDelegate for AppDelegate {
+        #[unsafe(method(applicationDidBecomeActive:))]
+        fn did_become_active(&self, _application: &UIApplication) {
+            lifecycle_changed(AppLifecycleState::Active);
+        }
+
+        #[unsafe(method(applicationWillResignActive:))]
+        fn will_resign_active(&self, _application: &UIApplication) {
+            lifecycle_changed(AppLifecycleState::Inactive);
+        }
+
+        #[unsafe(method(applicationDidEnterBackground:))]
+        fn did_enter_background(&self, _application: &UIApplication) {
+            lifecycle_changed(AppLifecycleState::Background);
+        }
+
+        #[unsafe(method(applicationWillEnterForeground:))]
+        fn will_enter_foreground(&self, _application: &UIApplication) {
+            lifecycle_changed(AppLifecycleState::Inactive);
+        }
+
+        #[unsafe(method(applicationDidReceiveMemoryWarning:))]
+        fn did_receive_memory_warning(&self, _application: &UIApplication) {
+            APP.with_borrow_mut(|app| {
+                app.as_mut()
+                    .expect("run() parks the app before UIKit launches")
+                    .on_memory_warning();
+            });
+        }
+
         // The launch hook. Same job as Flutter's FlutterAppDelegate: create a
         // screen-sized window, install the root view controller, make it key.
         #[unsafe(method(application:didFinishLaunchingWithOptions:))]
@@ -117,8 +182,8 @@ define_class!(
 
             // `mainScreen` and `initWithFrame` carry scenes-era deprecations
             // that don't apply to a scene-less app: there is exactly one
-            // screen and no window scene to attach to. Revisited if 008
-            // adopts the scene lifecycle (debt 002-1).
+            // screen and no window scene to attach to. Retained by ADR 008;
+            // revisit at the device/toolchain check in 009 (debt 002-1).
             #[expect(deprecated, reason = "scene-less lifecycle (ADR 002, debt 002-1)")]
             let window = {
                 let frame = UIScreen::mainScreen(mtm).bounds();
@@ -187,6 +252,7 @@ define_class!(
                     unreachable!("viewDidLoad runs at most once for the lone root view controller");
                 }
             });
+            sync_display_link();
         }
 
         // Frame requester #1 (mirroring FlutterViewController): UIKit calls
@@ -242,6 +308,11 @@ define_class!(
         fn on_display_link(&self, link: &CADisplayLink) {
             let start = CACurrentMediaTime();
             link.setPaused(true);
+            // A queued callback can arrive after deactivation. Do not draw
+            // or consume its pending request until the app is Active again.
+            if !FRAME_LOOP.with_borrow_mut(FrameLoop::take_frame) {
+                return;
+            }
             let Some(time) = FrameTime::from_seconds(link.timestamp(), link.targetTimestamp()) else {
                 // Do not fabricate animation time from an invalid tick.
                 LAST_METRICS.set(None);
@@ -268,6 +339,9 @@ define_class!(
 
 impl ViewController {
     fn dispatch_touches(&self, touches: &NSSet<UITouch>, phase: PointerPhase) {
+        if !FRAME_LOOP.with_borrow(FrameLoop::is_active) {
+            return;
+        }
         let view = self.view().expect("touch delivery implies a loaded view");
         for touch in touches {
             // UIKit preserves the UITouch object for the contact's entire

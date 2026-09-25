@@ -40,11 +40,11 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
 - [x] **006 — Frame timing** — frame callback with the display-link timestamp
   (Flutter's `onBeginFrame`), measure and log frame duration vs. target.
   *Done when:* example animates a moving rectangle smoothly using timestamps only.
-- [~] **007 — Touch input plumbing** — receive UITouch began/moved/ended/
+- [x] **007 — Touch input plumbing** — receive UITouch began/moved/ended/
   cancelled; convert to Mel's own pointer event types with stable pointer IDs
   for multi-touch (UIKit types must not leak upward).
   *Done when:* example logs Mel-typed pointer events for two simultaneous fingers; no UIKit/winit types in the public API.
-- [ ] **008 — App lifecycle & Metal decision point** — foreground/background/
+- [~] **008 — App lifecycle & Metal decision point** — foreground/background/
   memory-warning hooks routed into Mel; if 003 started CPU-raster, evaluate
   switching to a Metal-backed Skia surface now.
   *Done when:* backgrounding pauses the display link and drawing resumes cleanly; ADR records the GPU decision.
@@ -407,7 +407,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 
 | Phase | Features | Done |
 | --- | --- | --- |
-| 0 — Platform Shell (iOS) | 9 | 6 |
+| 0 — Platform Shell (iOS) | 9 | 7 |
 | 1 — Foundation | 7 | 0 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
@@ -420,4 +420,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **6** |
+| **Total** | **99** | **7** |

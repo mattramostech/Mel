@@ -73,10 +73,9 @@ normal callbacks remains part of 008's lifecycle integration.
 
 ## Review outcome
 
-Pending human review. Implementation self-check: Architecture ✅ · API
-ergonomics ✅ · Understandability ✅ · Scope discipline ✅. Correctness:
-automated checks pass; sustained native Move/Cancel and the visual contact
-markers remain for manual review (see the validation limits below).
+Reviewed and approved by the user on 2026-09-25. The validation notes below
+record the automated checks and observation limits from implementation.
+No new debt reported.
 
 Validation on 2026-09-25:
 
