@@ -9,6 +9,9 @@ mod ios;
 mod timing;
 pub use timing::{FrameTime, FrameTiming};
 
+mod pointer;
+pub use pointer::{PointerEvent, PointerId, PointerPhase, PointerPosition};
+
 /// The screen regions covered by system UI (notch, home indicator, status
 /// bar), in **logical points** — the safe area is where content is fully
 /// visible. A plain data carrier owned by the platform layer; Phase 1's
@@ -117,11 +120,11 @@ pub trait App {
     /// measurement; keep it brief. May call [`request_frame`].
     fn on_frame_timing(&mut self, _timing: FrameTiming) {}
 
-    /// A finger touched the screen (UIKit's touch-began). Deliberately
-    /// information-free — no position, no pointer ID: it exists so an app
-    /// can answer "the user poked the screen" with [`request_frame`].
-    /// Feature 007 replaces it with real Mel-typed pointer events.
-    fn on_touch(&mut self) {}
+    /// A touch began, moved, ended or was cancelled. Default: no-op.
+    /// Delivered once per changed contact on the main thread, with a stable
+    /// ID and logical viewport position. May call [`request_frame`]; input
+    /// alone does not schedule drawing. No hit testing or gestures yet.
+    fn on_pointer_event(&mut self, _event: PointerEvent) {}
 }
 
 /// Hands the calling thread to UIKit and runs the app. Never returns.

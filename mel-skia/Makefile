@@ -5,7 +5,7 @@
 #   make run EXAMPLE=002_blank_app   # a specific example
 #   make check                       # everything reviews require to be green
 
-EXAMPLE ?= 006_frame_timing
+EXAMPLE ?= 007_touch_input
 
 .PHONY: run check
 

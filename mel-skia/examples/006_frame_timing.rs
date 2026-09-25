@@ -72,7 +72,10 @@ fn main() -> ! {
             }
         }
 
-        fn on_touch(&mut self) {
+        fn on_pointer_event(&mut self, event: mel_platform::PointerEvent) {
+            if event.phase != mel_platform::PointerPhase::Down {
+                return;
+            }
             self.running = !self.running;
             println!(
                 "animation {}",

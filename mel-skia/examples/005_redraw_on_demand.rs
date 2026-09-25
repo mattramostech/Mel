@@ -12,7 +12,7 @@
 
 #[cfg(target_os = "ios")]
 fn main() -> ! {
-    use mel_platform::{App, Frame};
+    use mel_platform::{App, Frame, PointerEvent, PointerPhase};
 
     /// Background palette the taps cycle through: honey, mint, sky, blossom.
     const PALETTE: [(&str, [f32; 4]); 4] = [
@@ -57,7 +57,10 @@ fn main() -> ! {
             );
         }
 
-        fn on_touch(&mut self) {
+        fn on_pointer_event(&mut self, event: PointerEvent) {
+            if event.phase != PointerPhase::Down {
+                return;
+            }
             self.taps += 1;
             println!("touch #{} → request_frame()", self.taps);
             // The app decides a touch is worth a repaint — the shell never

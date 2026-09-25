@@ -27,7 +27,8 @@ use objc2_ui_kit::{
     UIScreen, UITouch, UIView, UIViewController, UIWindow,
 };
 
-use crate::{App, Frame, FrameTime, FrameTiming, SafeAreaInsets};
+use crate::pointer::PointerTracker;
+use crate::{App, Frame, FrameTime, FrameTiming, PointerPhase, PointerPosition, SafeAreaInsets};
 
 /// A viewport-metrics snapshot. UIKit fires layout passes liberally;
 /// memoizing the snapshot of the last *requested* frame keeps identical
@@ -53,6 +54,8 @@ thread_local! {
     /// controller because `request_frame()` — a free function — must reach
     /// it to unpause.
     static DISPLAY_LINK: OnceCell<Retained<CADisplayLink>> = const { OnceCell::new() };
+    /// Native identities stay inside the shell; only Mel IDs reach `App`.
+    static POINTERS: RefCell<PointerTracker> = RefCell::new(PointerTracker::default());
 }
 
 /// The request side of the loop — Flutter's `scheduleFrame`: unpause the
@@ -162,6 +165,9 @@ define_class!(
             // SAFETY: plain forward to `UIViewController`'s implementation
             // (documented to do nothing, called for protocol hygiene).
             let _: () = unsafe { msg_send![super(self), viewDidLoad] };
+            self.view()
+                .expect("viewDidLoad implies a loaded view")
+                .setMultipleTouchEnabled(true);
             let target: &AnyObject = self;
             // SAFETY: the target outlives the link (the link retains it),
             // and `onDisplayLink:` is defined on this very class below with
@@ -207,20 +213,26 @@ define_class!(
             request_frame();
         }
 
-        // Frame requester #2: the user poked the screen. The shell decides
-        // nothing here; the app hears about it and may call
-        // `request_frame()`. Positions, phases and pointer IDs are 007.
+        // Consume the changed contacts; the app decides whether to request
+        // a frame. All four phases follow the same translation path.
         #[unsafe(method(touchesBegan:withEvent:))]
-        fn touches_began(&self, touches: &NSSet<UITouch>, event: Option<&UIEvent>) {
-            // SAFETY: plain forward to `UIResponder`'s implementation
-            // (responder-chain hygiene for an event we only observe).
-            let _: () = unsafe { msg_send![super(self), touchesBegan: touches, withEvent: event] };
-            APP.with_borrow_mut(|app| {
-                let app = app
-                    .as_mut()
-                    .expect("run() parks the app before UIKit launches");
-                app.on_touch();
-            });
+        fn touches_began(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.dispatch_touches(touches, PointerPhase::Down);
+        }
+
+        #[unsafe(method(touchesMoved:withEvent:))]
+        fn touches_moved(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.dispatch_touches(touches, PointerPhase::Move);
+        }
+
+        #[unsafe(method(touchesEnded:withEvent:))]
+        fn touches_ended(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.dispatch_touches(touches, PointerPhase::Up);
+        }
+
+        #[unsafe(method(touchesCancelled:withEvent:))]
+        fn touches_cancelled(&self, touches: &NSSet<UITouch>, _event: Option<&UIEvent>) {
+            self.dispatch_touches(touches, PointerPhase::Cancel);
         }
 
         // The grant side (ADR 005): one tick per requested frame. Pausing
@@ -255,6 +267,32 @@ define_class!(
 );
 
 impl ViewController {
+    fn dispatch_touches(&self, touches: &NSSet<UITouch>, phase: PointerPhase) {
+        let view = self.view().expect("touch delivery implies a loaded view");
+        for touch in touches {
+            // UIKit preserves the UITouch object for the contact's entire
+            // lifetime. Its address is only a map key, never dereferenced.
+            let native = Retained::as_ptr(&touch) as usize;
+            let location = touch.locationInView(Some(&view));
+            let position = PointerPosition {
+                x: location.x,
+                y: location.y,
+            };
+            let timestamp = std::time::Duration::try_from_secs_f64(touch.timestamp())
+                .expect("UIKit touch timestamps are finite, nonnegative uptime");
+            let event = POINTERS
+                .with_borrow_mut(|pointers| pointers.event(native, phase, position, timestamp));
+            // Release tracker state before app code can request a frame.
+            if let Some(event) = event {
+                APP.with_borrow_mut(|app| {
+                    app.as_mut()
+                        .expect("run() parks the app before UIKit launches")
+                        .on_pointer_event(event);
+                });
+            }
+        }
+    }
+
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         // SAFETY: plain forward to `UIViewController`'s `init`; the subclass
         // adds no ivars that would need initializing first.

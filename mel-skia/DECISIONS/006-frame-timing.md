@@ -79,7 +79,7 @@ frame only while running. A tap toggles animation; resuming resets its origin.
 
 ## Review outcome
 
-Pending human review. Implementation self-check: Correctness ✅ ·
+Reviewed and approved 2026-09-25. Correctness ✅ ·
 Architecture ✅ · API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
 No new debt proposed; existing lifecycle debt 002-1 still belongs to 008.
 

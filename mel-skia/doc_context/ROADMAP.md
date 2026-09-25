@@ -37,10 +37,10 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
   when a frame was requested (pause the link when idle); clean separation
   `Platform events → App callback → Present`.
   *Done when:* CPU sits near 0% when idle; a tap triggers exactly one repaint.
-- [~] **006 — Frame timing** — frame callback with the display-link timestamp
+- [x] **006 — Frame timing** — frame callback with the display-link timestamp
   (Flutter's `onBeginFrame`), measure and log frame duration vs. target.
   *Done when:* example animates a moving rectangle smoothly using timestamps only.
-- [ ] **007 — Touch input plumbing** — receive UITouch began/moved/ended/
+- [~] **007 — Touch input plumbing** — receive UITouch began/moved/ended/
   cancelled; convert to Mel's own pointer event types with stable pointer IDs
   for multi-touch (UIKit types must not leak upward).
   *Done when:* example logs Mel-typed pointer events for two simultaneous fingers; no UIKit/winit types in the public API.
@@ -407,7 +407,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 
 | Phase | Features | Done |
 | --- | --- | --- |
-| 0 — Platform Shell (iOS) | 9 | 5 |
+| 0 — Platform Shell (iOS) | 9 | 6 |
 | 1 — Foundation | 7 | 0 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
@@ -420,4 +420,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **5** |
+| **Total** | **99** | **6** |
