@@ -24,6 +24,16 @@ fn main() -> ! {
 
     impl App for Demo {
         fn draw(&mut self, frame: &mut Frame) {
+            if self.origin.is_none() {
+                println!(
+                    "viewport {}×{} physical | {}×{} logical | scale {}",
+                    frame.physical_width(),
+                    frame.physical_height(),
+                    frame.logical_width(),
+                    frame.logical_height(),
+                    frame.scale_factor(),
+                );
+            }
             let time = frame.time();
             let origin = *self.origin.get_or_insert(time.timestamp);
             if self.running {

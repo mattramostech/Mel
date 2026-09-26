@@ -1,1 +1,13 @@
 /target
+
+# Local development signing assets and configuration must not enter the repo.
+*.mobileprovision
+*.p12
+*.pfx
+*.p8
+*.key
+*.pem
+*.app/
+.env
+.env.*
+!.env.example

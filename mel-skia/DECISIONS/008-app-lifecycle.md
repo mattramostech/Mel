@@ -77,10 +77,10 @@ to exercise the gate. Earlier examples remain regression checks.
 
 ## Review outcome
 
-Pending human review. Implementation self-check: Correctness ✅ for the
+Reviewed and approved by the user on 2026-09-25. Implementation self-check: Correctness ✅ for the
 checks below (native held-touch interruption remains a manual check) ·
 Architecture ✅ · API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
-Proposed debt: retained classic lifecycle (002-1) and CPU backend (008-1).
+Accepted debt: retained classic lifecycle (002-1) and CPU backend (008-1).
 
 Validation on 2026-09-25:
 
@@ -112,4 +112,3 @@ Validation on 2026-09-25:
   clippy. Held-touch native cancellation and a short system-overlay
   interruption remain manual checks; the underlying state/tracker logic is
   host-tested. No UIKit/Skia types were added to the public API.
-

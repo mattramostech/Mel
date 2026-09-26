@@ -3,6 +3,7 @@
 # Simulator, wrap it into a .app bundle, install it and launch it.
 #
 #   scripts/run-sim.sh 002_blank_app
+#   BUILD_MODE=release scripts/run-sim.sh 006_frame_timing
 #
 # Blocks while the app runs, streaming its stdout/stderr here (Ctrl-C
 # detaches the console; the app keeps running in the Simulator). Requires
@@ -16,6 +17,17 @@ if [[ $# -ne 1 ]]; then
 fi
 
 EXAMPLE="$1"
+if [[ ! "$EXAMPLE" =~ ^[0-9]{3}_[a-z0-9_]+$ ]]; then
+    echo "error: expected a numbered example such as 006_frame_timing" >&2
+    exit 1
+fi
+BUILD_MODE="${BUILD_MODE:-debug}"
+BUILD_ARGS=()
+case "$BUILD_MODE" in
+    debug) ;;
+    release) BUILD_ARGS+=(--release) ;;
+    *) echo "error: BUILD_MODE must be debug or release" >&2; exit 1 ;;
+esac
 TARGET="aarch64-apple-ios-sim"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Underscores are invalid in bundle identifiers.
@@ -24,14 +36,16 @@ BUNDLE_ID="dev.mel.example.${EXAMPLE//_/-}"
 cd "$ROOT"
 
 # 1. Build the example.
-cargo build --target "$TARGET" -p mel-platform --example "$EXAMPLE"
+# The guarded array expansion also supports macOS Bash 3.2 with nounset.
+cargo build --locked --target "$TARGET" --target-dir target -p mel-platform \
+    --example "$EXAMPLE" ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}
 
 # 2. Assemble the .app bundle. An iOS app bundle is just a directory holding
 #    the binary and an Info.plist; the Simulator requires no code signature.
 APP_DIR="target/sim/$EXAMPLE.app"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR"
-cp "target/$TARGET/debug/examples/$EXAMPLE" "$APP_DIR/$EXAMPLE"
+cp "target/$TARGET/$BUILD_MODE/examples/$EXAMPLE" "$APP_DIR/$EXAMPLE"
 
 # UILaunchScreen = {} opts into a runtime-generated launch screen — without
 # it, UIKit letterboxes apps that lack a launch storyboard instead of going

@@ -111,6 +111,10 @@ full-screen `UIWindow` with a plain root `UIViewController` — the blank app.
 
 ## Review outcome
 
+Device-flow follow-up: [ADR 009](009-real-device.md) keeps the Rust executable
+and adds development signing/deployment through Xcode CLI tools. No Xcode host
+or FFI boundary was needed; profile creation/renewal remains a setup step.
+
 Reviewed and approved 2026-08-05. Correctness ✅ · Architecture ✅ ·
 API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
 Debt filed: **002-1** (classic `UIApplicationDelegate` lifecycle instead of

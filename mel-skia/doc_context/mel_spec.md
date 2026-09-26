@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-09-25, after building feature 008 (pending review)._
+_Last updated: 2026-09-26, after feature 009's security review (pending feature review)._
 
 ---
 
@@ -21,10 +21,11 @@ _Last updated: 2026-09-25, after building feature 008 (pending review)._
 
 - **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
   app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
-  rotation), 005 (redraw-on-demand loop), 006 (frame timing), 007 (touch input).
-- **In progress:** 008 — App lifecycle & Metal decision point (built, pending review).
-- **Next up:** 009 — Run on a real device.
-- **Open debt:** 002-1 (classic lifecycle vs `UIScene`) and proposed 008-1
+  rotation), 005 (redraw-on-demand loop), 006 (frame timing), 007 (touch input),
+  008 (app lifecycle & Metal decision).
+- **In progress:** 009 — Run on a real device (built, pending review).
+- **Next up:** Phase 0 gate, then 010 — Offset & Size.
+- **Open debt:** 002-1 (classic lifecycle vs `UIScene`) and 008-1
   (CPU raster retained — see [DEBT.md](../DEBT.md)).
 
 ## 2. What runs today
@@ -40,7 +41,10 @@ a frame counter that stays fixed while suspended. The demo deliberately
 requests frames in every lifecycle callback to verify they cannot bypass
 this gate. Memory warnings log a counter and toggle the background color.
 
-The app remains pure Rust/UIKit, CPU-rasterized through Skia (ADR 008).
+`make run-device` builds/signs/installs the existing 006 motion demo on an
+explicitly selected physical iPhone. Set `DEVICE_ID` and `PROVISIONING_PROFILE`
+first; see §6 and the examples README. The app remains pure Rust/UIKit,
+CPU-rasterized through Skia (ADRs 008/009).
 Frames exist only on demand and while Active; requests coalesce and survive
 suspension. Each activation also schedules one fresh frame for static apps.
 Examples 002–007 remain runnable. Touch input is cancelled on interruption;
@@ -51,10 +55,10 @@ late terminal events are ignored. Rotation updates viewport metrics.
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001 (layout) · 002 (app shell) · 003 (Skia surface) · 004 (scale/insets/rotation) · 005 (redraw on demand) · 006 (frame timing) · 007 (touch input) · 008 (lifecycle/GPU decision)
-├── DEBT.md               002-1 retained; 008-1 proposed
+├── DECISIONS/            001–009 (latest: real-device signing/deploy)
+├── DEBT.md               002-1 and 008-1 retained
 ├── examples/             002_blank_app.rs · 003_skia_surface.rs · 004_scale_rotation.rs · 005_redraw_on_demand.rs · 006_frame_timing.rs · 007_touch_input.rs · 008_app_lifecycle.rs + README
-├── scripts/run-sim.sh    the one-command Simulator flow (ADR 002)
+├── scripts/              run-sim.sh (002) · run-device.py + signing tests (009)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
 └── crates/               one crate per layer (ADR 001)
@@ -188,8 +192,8 @@ impl Frame {
   notifying App. No tracker/frame-loop borrow spans app callbacks. Memory
   warnings call `App::on_memory_warning` independently of lifecycle.
 - **Lifecycle model:** classic `UIApplicationDelegate`/`UIWindow`, _not_
-  scene-based (`UIScene`) — retained by ADR 008; debt 002-1 is re-deferred
-  to 009 and the Phase 0 gate for device/SDK compatibility. The
+  scene-based (`UIScene`) — retained by ADRs 008/009 after a successful device
+  launch; debt 002-1 remains for the Phase 0 gate and future SDK compatibility. The
   `#[expect(deprecated)]` on `UIScreen::mainScreen` / `UIWindow::initWithFrame`
   is deliberate: those are scenes-era deprecations that don't apply to a
   scene-less app. Don't "fix" them independently of 002-1.
@@ -231,6 +235,8 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p mel-platform --example 006_frame_timing
+python3 -B -m unittest discover -s scripts -p 'test_*.py'
+bash -n scripts/run-sim.sh
 ```
 
 iOS (the shell code only compiles for iOS targets):
@@ -243,16 +249,45 @@ cargo build --target aarch64-apple-ios -p mel-platform --example 008_app_lifecyc
 First builds are slow: `skia-safe` downloads prebuilt Skia binaries per
 target (host, `-sim`, device) and compiles its bindings once each.
 
-Run on the Simulator: `scripts/run-sim.sh <example>` — builds (debug) for
+Run on the Simulator: `scripts/run-sim.sh <example>` — builds for
 `aarch64-apple-ios-sim`, assembles `target/sim/<example>.app` (generated
 `Info.plist`; `UILaunchScreen = {}` is what makes it full-screen without a
 storyboard), boots an iPhone Simulator if none is booted, `simctl install` +
 `launch --console-pty` (app stdout streams to the terminal — the only
 "logging" channel until Phase 11). Apple Silicon only.
 
-A thin [Makefile](../Makefile) wraps both flows: `make run`
-(`EXAMPLE=NNN_slug` to pick one, defaults to the latest) and `make check`
-(host/iOS checks plus the motion example tests).
+Run on an iPhone (iOS 17+, paired, Developer Mode enabled, unlocked):
+
+```sh
+export DEVICE_ID='<identifier from xcrun devicectl list devices>'
+export PROVISIONING_PROFILE='/absolute/path/to/development.mobileprovision'
+make run-device                         # defaults to 006_frame_timing
+make run-device EXAMPLE=008_app_lifecycle
+```
+
+[`scripts/run-device.py`](../scripts/run-device.py) uses Python's standard
+library plus Xcode tools. It validates profile expiry, device UDID, App ID,
+team and certificate/private-key availability before building; signs the
+bundle under `target/device/` with concrete minimal entitlements; verifies,
+installs and launches with the console attached. `SIGNING_IDENTITY` (SHA-1)
+resolves multiple matching identities; `BUNDLE_ID` supports explicit profiles.
+Signing assets are provided by the developer/Xcode, never checked in. See the
+[setup and troubleshooting guide](../examples/README.md#feature-009-run-on-a-physical-iphone).
+The runner masks device/signing identifiers in command echoes and errors.
+Native diagnostics may contain metadata; the generated `.app` embeds a profile
+with provisioned device IDs. Both remain private development artifacts, and
+signing-file types/local environment files are ignored by Git.
+Ctrl-C stops the device app. The Simulator console keeps its existing behavior.
+
+Both runners default to debug; `BUILD_MODE=release` selects release. Compare
+the same mode and scene on both targets. Example 006 now logs viewport/scale
+at animation start. ADR 009 records the hardware/Simulator sampling method
+and results, which measure CPU submission rather than display completion.
+
+A thin [Makefile](../Makefile) wraps `make run` (Simulator, defaults to 008),
+`make run-device` (iPhone, defaults to 006), and `make check` (host/Simulator
+Rust checks, motion tests, signing tests and shell syntax). Both run targets
+accept `EXAMPLE=NNN_slug`.
 
 ## 7. Decisions in force (details in `DECISIONS/`)
 
@@ -260,9 +295,9 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   by Cargo (no cycles, edges reviewed); toolchain pinned; CI disabled until
   it pays for itself.
 - **ADR 002** — pure-Rust UIKit shell via `objc2`; no Xcode project, no
-  winit; classic lifecycle (debt 002-1); one-command flow is a shell script
-  (revisit xtask at 009/135); examples attach to `mel-platform`. Feature 009
-  (real device) may reopen the Xcode-host question for codesigning.
+  winit; classic lifecycle (debt 002-1); Simulator flow is a shell script;
+  examples attach to `mel-platform`. ADR 009 adds a Python device runner
+  without an Xcode host. Revisit xtask at 135 if tooling growth warrants it.
 - **ADR 003** — CPU raster, no Metal yet (re-evaluated and retained by
   ADR 008): app draws via `mel_painting::fill` into a shell-owned BGRA
   buffer; shell presents it as `CALayer.contents` through a `CGImage`.
@@ -294,9 +329,15 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
 - **ADR 008** — Active/Inactive/Background plus a separate memory-warning
   callback. Active-only rendering, suspension-safe pending requests, a fresh
   frame on activation and cancellation of interrupted contacts. Retain CPU
-  raster based on current minimal-scene evidence; hardware timing (009) and
-  painting API design (020) revisit Metal. Classic lifecycle remains for this
-  single-window shell; 002-1 and proposed 008-1 capture the limits.
+  raster based on current minimal-scene evidence, supported by 009 hardware
+  timing; painting API design (020) revisits Metal. Classic lifecycle remains for this
+  single-window shell; 002-1 and 008-1 capture the limits.
+- **ADR 009** — Keep the Rust executable and use `security`/`codesign` plus
+  `devicectl` for local iPhone deployment. Explicit device/profile, validated
+  signing inputs, minimal entitlements, no Xcode host project. Reuse example
+  006; hardware timing supports retaining CPU raster for this minimal scene.
+  Classic lifecycle launched on the tested iOS 26.6.2 device; both debts remain
+  for the Phase 0 review and before Phase 2's painting API.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
@@ -306,7 +347,8 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
   two copies per presented frame.
 - No hit testing, pointer target dispatch/capture (Phase 5), or gestures
   (Phase 8); touch events currently go directly to the App.
-- No real-device or codesigning flow (009), no UIScene support yet.
+- No automatic provisioning/profile renewal or App Store export; no UIScene
+  support yet. The device flow consumes an existing development profile.
 - No Mel `Canvas`/`Paint`/`Color` types — `fill()`/`fill_rect()` are the
   entire painting API until Phase 2; five of the seven crates are still
   empty.
@@ -314,9 +356,10 @@ A thin [Makefile](../Makefile) wraps both flows: `make run`
 
 ## 9. Where the next features land
 
-- **009 (real device):** codesigning/deploy flow and example 006 on hardware.
-  Compare timing with Simulator; revisit retained CPU backend (008-1) and
-  classic lifecycle (002-1) against the chosen SDK/device before the phase gate.
+- **After 009 review:** the Phase 0 gate must rerun phase examples, review
+  002-1/008-1 and record a retrospective before 010 begins.
+- **010 (Offset & Size):** pure Rust value types and operator/edge-case tests
+  in `mel-foundation`, after the phase gate.
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 
