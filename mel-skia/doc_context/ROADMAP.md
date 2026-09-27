@@ -60,10 +60,10 @@ retrospective](../DECISIONS/phase-0-retrospective.md).
 Goal: Flutter's `dart:ui`/foundation value types, in pure Rust, fully unit-tested.
 No Skia dependency in this layer.
 
-- [~] **010 — Offset & Size** — with the operators Flutter has (`+`, `-`, `*`,
+- [x] **010 — Offset & Size** — with the operators Flutter has (`+`, `-`, `*`,
   `contains`, `center`, aspect ratio, `Size::infinite`, etc.).
   *Done when:* unit tests cover the operator table and edge cases (zero, infinite, NaN policy decided).
-- [ ] **011 — Rect** — `from_ltwh`/`from_ltrb`/`from_center`, intersection, union,
+- [~] **011 — Rect** — `from_ltwh`/`from_ltrb`/`from_center`, intersection, union,
   inflate/deflate, contains, overlaps.
   *Done when:* tests pass, including empty/inverted rect semantics (ADR: match Flutter or fix it?).
 - [ ] **012 — Radius & RRect** — circular/elliptical radii, corner-specific,
@@ -411,7 +411,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 | Phase | Features | Done |
 | --- | --- | --- |
 | 0 — Platform Shell (iOS) | 9 | 9 |
-| 1 — Foundation | 7 | 0 |
+| 1 — Foundation | 7 | 1 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
 | 4 — Layout | 16 | 0 |
@@ -423,4 +423,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **9** |
+| **Total** | **99** | **10** |

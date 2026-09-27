@@ -28,6 +28,7 @@ running). See [ADR 002](../DECISIONS/002-app-shell-blank-app.md).
 | 008 | `008_app_lifecycle` | Animation pauses on interruption/background, restarts on activation; lifecycle/frame logs and memory-warning color change |
 | 009 | Reuses `006_frame_timing` | Signed physical-iPhone deployment via `make run-device`; hardware vs. Simulator timing sanity check |
 | 010 | `010_offset_size` (host) | Offset/Size arithmetic, origin-relative center, containment, interpolation and unbounded extents |
+| 011 | `011_rect` (host) | Rect construction, clipping intersection, bounding union, half-open containment and empty/inverted overlap rules |
 
 Feature 010 runs on the Mac without UIKit or Skia:
 
@@ -40,6 +41,19 @@ The console prints a center at `(62, 60)` for a 100×80 size at `(12, 20)`,
 growth as an Offset, interpolation/extrapolation samples and an unbounded
 height. Assertions check containment (right/bottom excluded) and edge cases.
 This pure-logic demo does not use `scripts/run-sim.sh`.
+
+Feature 011 also runs on the host:
+
+```sh
+cargo run -p mel-foundation --example 011_rect
+cargo test -p mel-foundation --test rect
+```
+
+The console shows bounds created from `Offset & Size`, their intersection
+with a centered clip, and their bounding union. Assertions check excluded
+right/bottom edges, a disjoint intersection that retains negative width,
+inflation/deflation, and rejection of empty, inverted or NaN overlap. No
+rendering or Simulator is needed. See [ADR 011](../DECISIONS/011-rect.md).
 
 Feature 006: `make run EXAMPLE=006_frame_timing` starts a four-second horizontal cycle inside the safe
 area. Check that the motion remains smooth after rotation; changing refresh

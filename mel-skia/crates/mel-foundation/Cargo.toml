@@ -11,3 +11,7 @@ repository.workspace = true
 [[example]]
 name = "010_offset_size"
 path = "../../examples/010_offset_size.rs"
+
+[[example]]
+name = "011_rect"
+path = "../../examples/011_rect.rs"

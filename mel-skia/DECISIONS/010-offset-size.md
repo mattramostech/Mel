@@ -46,7 +46,8 @@ obey Rust's ordering laws when only one component is equal. Named predicates
 preserve their meaning, without cross-type comparison/inheritance. `%` uses
 [Dart's Euclidean modulo](https://api.dart.dev/dart-core/double/operator_modulo.html)
 (nonnegative even for negative operands), explicitly unlike scalar Rust `%`.
-The `& Size -> Rect` operator waits for 011; no placeholder Rect is introduced.
+The `& Size -> Rect` operator was deferred to 011; see
+[ADR 011](011-rect.md) for its implementation.
 
 `Offset` includes direction/distance, independent scale and translation.
 `Size` includes square/radius/one-axis constructors, flipped extents, magnitude
@@ -94,7 +95,7 @@ The few intentional Rust differences above are part of the tested contract.
 
 ## Review outcome
 
-Pending human review. Implementation self-check: Correctness ✅ ·
+Human review approved on 2026-09-26. Implementation self-check: Correctness ✅ ·
 Architecture ✅ · API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
 No new debt proposed; existing 002-1/008-1 were retained at the Phase 0 gate.
 

@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-09-26, after the Phase 0 gate and feature 010 implementation (pending review)._
+_Last updated: 2026-09-26, after feature 010 approval and feature 011 implementation (pending review)._
 
 ---
 
@@ -22,10 +22,11 @@ _Last updated: 2026-09-26, after the Phase 0 gate and feature 010 implementation
 - **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
   app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
   rotation), 005 (redraw-on-demand loop), 006 (frame timing), 007 (touch input),
-  008 (app lifecycle & Metal decision), 009 (real-device deployment).
+  008 (app lifecycle & Metal decision), 009 (real-device deployment),
+  010 (Offset & Size).
 - **Phase 0 gate:** regression sweep, debt review and retrospective completed.
-- **In progress:** 010 — Offset & Size (built, pending review).
-- **Next up:** 011 — Rect, after 010 review.
+- **In progress:** 011 — Rect (built, pending review).
+- **Next up:** 012 — Radius & RRect, after 011 review.
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene`) and 008-1
   (CPU raster retained — see [DEBT.md](../DEBT.md)).
 
@@ -56,9 +57,9 @@ late terminal events are ignored. Rotation updates viewport metrics.
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001–010 + Phase 0 retrospective
+├── DECISIONS/            001–011 + Phase 0 retrospective
 ├── DEBT.md               002-1 and 008-1 retained
-├── examples/             002–008 iOS demos · 010_offset_size.rs (host) + README
+├── examples/             002–008 iOS demos · 010/011 host geometry demos + README
 ├── scripts/              run-sim.sh (002) · run-device.py + signing tests (009)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
@@ -67,7 +68,7 @@ mel-skia/
 
 | Crate | Layer (CONTEXT.md §5) | State |
 | --- | --- | --- |
-| `mel-foundation` | geometry, color, ids | **Offset & Size (010)** — see below |
+| `mel-foundation` | geometry, color, ids | **Offset & Size (010), Rect (011)** — see below |
 | `mel-painting` | Canvas/Paint over Skia — the only crate ever allowed `skia-safe` | **bootstraps `fill()` (003) + `fill_rect()` (004)** — see §5 |
 | `mel-compositing` | layer tree, scenes | empty placeholder |
 | `mel-scheduling` | frame pipeline, tickers | empty placeholder |
@@ -104,7 +105,8 @@ extent constructors, nine origin-relative anchors, half-open containment,
 aspect ratio, flipping and side magnitudes. Both support scalar arithmetic,
 Euclidean `%`, floating `div_trunc`, component predicates `all_lt/le/gt/ge`
 and non-null `lerp` with extrapolation. No `PartialOrd`: componentwise strict
-comparison does not fit Rust's ordering laws. Rect construction belongs to 011.
+comparison does not fit Rust's ordering laws. `Offset & Size` now constructs a
+Rect (011).
 
 Negative extents, infinities and NaN are retained. `is_finite` requires both
 components finite; `is_infinite` recognizes either sign. NaN ordered comparisons
@@ -118,6 +120,39 @@ Run `cargo run -p mel-foundation --example 010_offset_size` on the host.
 Platform carriers remain platform-owned: importing foundation there would
 invert the documented layers. At an app boundary, explicitly construct an
 Offset from `PointerPosition`'s `x/y` if needed; no new dependency edge is added.
+
+### `mel-foundation` rectangles (011)
+
+[`src/rect.rs`](../crates/mel-foundation/src/rect.rs) adds `Rect`, re-exported
+at the crate root. It is a dependency-free `Copy` value with public `f64`
+`left/top/right/bottom` fields, `ZERO`, `Default` and exact `PartialEq`.
+Const constructors: `from_ltrb`, `from_ltwh`, `from_center` and
+`from_origin_size` (also spelled `Offset & Size`).
+
+```rust
+use mel_foundation::{Offset, Rect, Size};
+let bounds = Offset::new(12.0, 20.0) & Size::new(100.0, 80.0);
+let clip = Rect::from_center(Offset::new(100.0, 80.0), 40.0, 40.0);
+assert_eq!(bounds.intersect(clip), Rect::from_ltrb(80.0, 60.0, 112.0, 100.0));
+assert!(bounds.overlaps(clip));
+assert!(!bounds.contains(bounds.bottom_right()));
+```
+
+Accessors provide width/height/size and top-left/center/bottom-right.
+`shift`/`translate`, `inflate`/`deflate`, `intersect`, bounding `union`,
+half-open `contains` and positive-area `overlaps` return values without
+normalizing the edges. Disjoint intersections and excessive deflation retain
+inverted results. Empty inputs still contribute their edges to union; `ZERO`
+is not an identity. Unlike Flutter's degenerate overlap cases, empty/inverted
+inputs never overlap.
+
+NaN propagates through edge extrema and prevents containment/overlap.
+`is_empty` compares opposing edges, so NaN alone does not mean empty and equal
+infinite edges are empty. `has_nan`, `is_finite` and `is_infinite` classify the
+stored edges; the latter recognizes either infinity sign. Arithmetic follows
+IEEE-754, including undefined infinite centers. See [ADR 011](../DECISIONS/011-rect.md)
+and the public contract tests in [`tests/rect.rs`](../crates/mel-foundation/tests/rect.rs).
+Run `cargo run -p mel-foundation --example 011_rect` on the host.
 
 ## 4. `mel-platform` — the app shell (features 002–008)
 
@@ -275,6 +310,7 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p mel-foundation --example 010_offset_size
+cargo run -p mel-foundation --example 011_rect
 cargo test -p mel-platform --example 006_frame_timing
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 bash -n scripts/run-sim.sh
@@ -381,7 +417,12 @@ accept `EXAMPLE=NNN_slug`.
   retained both debts, with their next triggers recorded in DEBT.md.
 - **ADR 010** — distinct dependency-free Offset/Size value types with typed
   arithmetic, named component comparisons and an explicit IEEE-754 policy.
-  No platform-carrier migration or premature Rect; pure-logic host demo.
+  No platform-carrier migration; pure-logic host demo. Rect construction
+  deferred at 010 is implemented by 011.
+- **ADR 011** — edge-based Rect with unnormalized empty/inverted bounds,
+  half-open containment, bounding union and positive-area overlap. Overlap
+  rejects Flutter's empty/inverted/NaN false positives; extrema retain NaN.
+  Named origin/size construction and `Offset & Size`; pure-logic host demo.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
@@ -400,8 +441,8 @@ accept `EXAMPLE=NNN_slug`.
 
 ## 9. Where the next features land
 
-- **After 010 review:** 011 adds Rect to `mel-foundation`, deciding
-  empty/inverted rectangle semantics and construction from Offset/Size.
+- **After 011 review:** 012 adds Radius & RRect to `mel-foundation`, including
+  corner-specific radii, containment and inner/outer bounds.
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 

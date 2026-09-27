@@ -5,5 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod geometry;
+mod rect;
 
 pub use geometry::{Offset, Size};
+pub use rect::Rect;
