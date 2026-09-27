@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-09-26, after feature 009's security review (pending feature review)._
+_Last updated: 2026-09-26, after the Phase 0 gate and feature 010 implementation (pending review)._
 
 ---
 
@@ -22,9 +22,10 @@ _Last updated: 2026-09-26, after feature 009's security review (pending feature 
 - **Done (reviewed):** 001 (workspace & toolchain), 002 (app shell & blank
   app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
   rotation), 005 (redraw-on-demand loop), 006 (frame timing), 007 (touch input),
-  008 (app lifecycle & Metal decision).
-- **In progress:** 009 — Run on a real device (built, pending review).
-- **Next up:** Phase 0 gate, then 010 — Offset & Size.
+  008 (app lifecycle & Metal decision), 009 (real-device deployment).
+- **Phase 0 gate:** regression sweep, debt review and retrospective completed.
+- **In progress:** 010 — Offset & Size (built, pending review).
+- **Next up:** 011 — Rect, after 010 review.
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene`) and 008-1
   (CPU raster retained — see [DEBT.md](../DEBT.md)).
 
@@ -55,9 +56,9 @@ late terminal events are ignored. Rotation updates viewport metrics.
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001–009 (latest: real-device signing/deploy)
+├── DECISIONS/            001–010 + Phase 0 retrospective
 ├── DEBT.md               002-1 and 008-1 retained
-├── examples/             002_blank_app.rs · 003_skia_surface.rs · 004_scale_rotation.rs · 005_redraw_on_demand.rs · 006_frame_timing.rs · 007_touch_input.rs · 008_app_lifecycle.rs + README
+├── examples/             002–008 iOS demos · 010_offset_size.rs (host) + README
 ├── scripts/              run-sim.sh (002) · run-device.py + signing tests (009)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
@@ -66,7 +67,7 @@ mel-skia/
 
 | Crate | Layer (CONTEXT.md §5) | State |
 | --- | --- | --- |
-| `mel-foundation` | geometry, color, ids | empty placeholder |
+| `mel-foundation` | geometry, color, ids | **Offset & Size (010)** — see below |
 | `mel-painting` | Canvas/Paint over Skia — the only crate ever allowed `skia-safe` | **bootstraps `fill()` (003) + `fill_rect()` (004)** — see §5 |
 | `mel-compositing` | layer tree, scenes | empty placeholder |
 | `mel-scheduling` | frame pipeline, tickers | empty placeholder |
@@ -79,6 +80,44 @@ Exactly one exists: `mel-platform` → `mel-painting` as a **dev-dependency**
 (examples are app-level code above every layer — ADR 003); the libraries
 themselves still have zero edges, and `cargo tree -i skia-safe` shows Skia
 confined to `mel-painting`.
+
+### `mel-foundation` geometry (010)
+
+[`src/geometry.rs`](../crates/mel-foundation/src/geometry.rs) defines `Offset`
+and `Size`, re-exported at the crate root. Both are `Copy` values with public
+`f64` fields, const constructors, `ZERO`/`INFINITE`, exact `PartialEq` and no
+dependencies or unsafe code. Public API tests live in
+[`tests/geometry.rs`](../crates/mel-foundation/tests/geometry.rs).
+
+```rust
+use mel_foundation::{Offset, Size};
+let origin = Offset::new(12.0, 20.0);
+let size = Size::new(100.0, 80.0);
+assert_eq!(size.center(origin), Offset::new(62.0, 60.0));
+assert!(size.contains(size.center(origin) - origin));
+let growth: Offset = Size::new(108.0, 84.0) - size;
+assert_eq!(size + growth, Size::new(108.0, 84.0));
+```
+
+Offset has vector arithmetic, direction/distance, scale/translate. Size has
+extent constructors, nine origin-relative anchors, half-open containment,
+aspect ratio, flipping and side magnitudes. Both support scalar arithmetic,
+Euclidean `%`, floating `div_trunc`, component predicates `all_lt/le/gt/ge`
+and non-null `lerp` with extrapolation. No `PartialOrd`: componentwise strict
+comparison does not fit Rust's ordering laws. Rect construction belongs to 011.
+
+Negative extents, infinities and NaN are retained. `is_finite` requires both
+components finite; `is_infinite` recognizes either sign. NaN ordered comparisons
+fail, numeric results propagate NaN, and empty or NaN sizes contain no points.
+`is_empty` means a nonpositive extent, not merely a non-finite one. Zero-height
+aspect ratios have explicit Flutter-style rules; NaN stays NaN. Equal lerp
+components are preserved even if infinite. Full API/numeric differences are
+recorded in [ADR 010](../DECISIONS/010-offset-size.md).
+
+Run `cargo run -p mel-foundation --example 010_offset_size` on the host.
+Platform carriers remain platform-owned: importing foundation there would
+invert the documented layers. At an app boundary, explicitly construct an
+Offset from `PointerPosition`'s `x/y` if needed; no new dependency edge is added.
 
 ## 4. `mel-platform` — the app shell (features 002–008)
 
@@ -154,7 +193,8 @@ impl Frame {
   logical points, including safe areas, with no clamping or scale conversion.
   The tracker retains each last sample so interruption can drain all remaining
   contacts into Cancel events at their last positions, with monotonic times.
-  `PointerPosition` is a bootstrap carrier until Offset (010).
+  `PointerPosition` remains a platform-owned carrier; apps can now construct an
+  Offset explicitly (ADR 010), without platform depending upward on foundation.
 - [`src/lifecycle.rs`](../crates/mel-platform/src/lifecycle.rs) — native-free
   `AppLifecycleState` and private host-tested `FrameLoop`: pending requests
   are independent of eligibility to draw. Initial Inactive blocks ticks;
@@ -193,8 +233,8 @@ impl Frame {
   warnings call `App::on_memory_warning` independently of lifecycle.
 - **Lifecycle model:** classic `UIApplicationDelegate`/`UIWindow`, _not_
   scene-based (`UIScene`) — retained by ADRs 008/009 after a successful device
-  launch; debt 002-1 remains for the Phase 0 gate and future SDK compatibility. The
-  `#[expect(deprecated)]` on `UIScreen::mainScreen` / `UIWindow::initWithFrame`
+  launch; debt 002-1 was retained at the Phase 0 gate for future SDK compatibility.
+  The `#[expect(deprecated)]` on `UIScreen::mainScreen` / `UIWindow::initWithFrame`
   is deliberate: those are scenes-era deprecations that don't apply to a
   scene-less app. Don't "fix" them independently of 002-1.
 - **Dependencies** ([Cargo.toml](../crates/mel-platform/Cargo.toml)):
@@ -234,6 +274,7 @@ Host (must be clean before every review — CONTEXT.md §6):
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo run -p mel-foundation --example 010_offset_size
 cargo test -p mel-platform --example 006_frame_timing
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 bash -n scripts/run-sim.sh
@@ -336,8 +377,11 @@ accept `EXAMPLE=NNN_slug`.
   `devicectl` for local iPhone deployment. Explicit device/profile, validated
   signing inputs, minimal entitlements, no Xcode host project. Reuse example
   006; hardware timing supports retaining CPU raster for this minimal scene.
-  Classic lifecycle launched on the tested iOS 26.6.2 device; both debts remain
-  for the Phase 0 review and before Phase 2's painting API.
+  Classic lifecycle launched on the tested iOS device; the Phase 0 gate
+  retained both debts, with their next triggers recorded in DEBT.md.
+- **ADR 010** — distinct dependency-free Offset/Size value types with typed
+  arithmetic, named component comparisons and an explicit IEEE-754 policy.
+  No platform-carrier migration or premature Rect; pure-logic host demo.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
@@ -350,16 +394,14 @@ accept `EXAMPLE=NNN_slug`.
 - No automatic provisioning/profile renewal or App Store export; no UIScene
   support yet. The device flow consumes an existing development profile.
 - No Mel `Canvas`/`Paint`/`Color` types — `fill()`/`fill_rect()` are the
-  entire painting API until Phase 2; five of the seven crates are still
+  entire painting API until Phase 2; four of the seven crates are still
   empty.
 - No logging/debug tooling beyond `println!` through the attached console.
 
 ## 9. Where the next features land
 
-- **After 009 review:** the Phase 0 gate must rerun phase examples, review
-  002-1/008-1 and record a retrospective before 010 begins.
-- **010 (Offset & Size):** pure Rust value types and operator/edge-case tests
-  in `mel-foundation`, after the phase gate.
+- **After 010 review:** 011 adds Rect to `mel-foundation`, deciding
+  empty/inverted rectangle semantics and construction from Offset/Size.
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 

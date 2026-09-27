@@ -1,0 +1,36 @@
+# Private local state and build output, across the whole repository.
+.DS_Store
+._*
+target/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.env
+.env.*
+!.env.example
+
+# Apple signing/account material and deployable development artifacts.
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.pfx
+*.p8
+*.key
+*.pem
+*.cer
+*.crt
+*.app/
+*.ipa
+*.xcarchive/
+*.dSYM/
+
+# Raw diagnostics may contain credentials, device IDs or personal paths.
+logs/
+*.log
+*.log.*
+*.xcactivitylog
+*.xcresult/
+*.trace/
+*.crash
+*.ips
+privacy-audit-private/

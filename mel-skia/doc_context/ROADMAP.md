@@ -48,16 +48,19 @@ bootstrap". Target: iOS Simulator first, real device as its own feature.
   memory-warning hooks routed into Mel; if 003 started CPU-raster, evaluate
   switching to a Metal-backed Skia surface now.
   *Done when:* backgrounding pauses the display link and drawing resumes cleanly; ADR records the GPU decision.
-- [~] **009 — Run on a real device** — codesigning, deploy flow, and a quick
+- [x] **009 — Run on a real device** — codesigning, deploy flow, and a quick
   performance sanity check (frame times on hardware vs. Simulator).
   *Done when:* example 006 runs on a physical iPhone via a documented flow.
+
+Phase 0 gate completed on 2026-09-26: [regression sweep, debt review and
+retrospective](../DECISIONS/phase-0-retrospective.md).
 
 ## Phase 1 — Foundation (geometry & basic types)
 
 Goal: Flutter's `dart:ui`/foundation value types, in pure Rust, fully unit-tested.
 No Skia dependency in this layer.
 
-- [ ] **010 — Offset & Size** — with the operators Flutter has (`+`, `-`, `*`,
+- [~] **010 — Offset & Size** — with the operators Flutter has (`+`, `-`, `*`,
   `contains`, `center`, aspect ratio, `Size::infinite`, etc.).
   *Done when:* unit tests cover the operator table and edge cases (zero, infinite, NaN policy decided).
 - [ ] **011 — Rect** — `from_ltwh`/`from_ltrb`/`from_center`, intersection, union,
@@ -407,7 +410,7 @@ cache · custom shaders · platform views (UIKit view embedding).
 
 | Phase | Features | Done |
 | --- | --- | --- |
-| 0 — Platform Shell (iOS) | 9 | 8 |
+| 0 — Platform Shell (iOS) | 9 | 9 |
 | 1 — Foundation | 7 | 0 |
 | 2 — Painting | 10 | 0 |
 | 3 — Compositing & Scheduling | 7 | 0 |
@@ -420,4 +423,4 @@ cache · custom shaders · platform views (UIKit view embedding).
 | 10 — Scrolling | 6 | 0 |
 | 11 — DevEx & Tooling | 6 | 0 |
 | 12 — Showcase | 4 | 0 |
-| **Total** | **99** | **8** |
+| **Total** | **99** | **9** |

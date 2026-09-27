@@ -2,10 +2,11 @@
 
 Numbered runnable demos, one per visible feature (`NNN_slug.rs`), never
 deleted — the living history of the project and its regression checks
-(CONTEXT.md §2.4). Files live here but are `[[example]]` targets of
-`mel-platform` (ADR 002), so cargo can build them.
+(CONTEXT.md §2.4). Files live here and attach to their owning crate as
+`[[example]]` targets: iOS demos use `mel-platform` (ADR 002); pure geometry
+uses `mel-foundation` (ADR 010).
 
-Launch any example on the iOS Simulator with the one-command flow:
+Launch any iOS demo on the Simulator with the one-command flow:
 
 ```sh
 scripts/run-sim.sh 002_blank_app
@@ -26,6 +27,19 @@ running). See [ADR 002](../DECISIONS/002-app-shell-blank-app.md).
 | 007 | `007_touch_input` | Logs Mel pointer phases/IDs/positions/time; a colored square follows each active contact |
 | 008 | `008_app_lifecycle` | Animation pauses on interruption/background, restarts on activation; lifecycle/frame logs and memory-warning color change |
 | 009 | Reuses `006_frame_timing` | Signed physical-iPhone deployment via `make run-device`; hardware vs. Simulator timing sanity check |
+| 010 | `010_offset_size` (host) | Offset/Size arithmetic, origin-relative center, containment, interpolation and unbounded extents |
+
+Feature 010 runs on the Mac without UIKit or Skia:
+
+```sh
+cargo run -p mel-foundation --example 010_offset_size
+cargo test -p mel-foundation
+```
+
+The console prints a center at `(62, 60)` for a 100×80 size at `(12, 20)`,
+growth as an Offset, interpolation/extrapolation samples and an unbounded
+height. Assertions check containment (right/bottom excluded) and edge cases.
+This pure-logic demo does not use `scripts/run-sim.sh`.
 
 Feature 006: `make run EXAMPLE=006_frame_timing` starts a four-second horizontal cycle inside the safe
 area. Check that the motion remains smooth after rotation; changing refresh

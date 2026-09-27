@@ -72,8 +72,9 @@ hardware run before the Phase 0 gate. Do not start Phase 1 until that gate.
 
 ## Review outcome
 
-Pending human review. Implementation self-check: Correctness ✅ for automated
-checks and native deployment (physical touch/rotation remain manual checks) ·
+Reviewed and approved by the user on 2026-09-26. Implementation self-check:
+Correctness ✅ for automated checks and native deployment (physical
+touch/rotation remain manual checks) ·
 Architecture ✅ · API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
 Existing 002-1 and 008-1 retained with hardware evidence; no new debt proposed.
 
@@ -86,11 +87,11 @@ Validation on 2026-09-25:
   missing/wrong/ambiguous identities and device prerequisites.
 - Device-target all-targets clippy also passed with warnings denied.
 - `make run-device` built 006 for `aarch64-apple-ios`, signed and passed
-  `codesign --verify --strict`, installed through devicectl on an iPhone 14 Pro
-  / iOS 26.6.2 over its paired network connection, and streamed live frame
-  logs. Xcode 26.6 (17F113). No Xcode project or debugger was involved.
-- The Simulator flow launched the same debug scene on iPhone 17 Pro / iOS
-  26.5. Visual inspection showed the brown square on honey and successful
+  `codesign --verify --strict`, installed through devicectl on a physical iPhone
+  using the locally tested iOS/Xcode pair, and streamed live frame logs.
+  No Xcode project or debugger was involved.
+- The Simulator flow launched the same debug scene on an iPhone Simulator.
+  Visual inspection showed the brown square on honey and successful
   rotation; relaunched in portrait for the timing comparison.
 - `BUILD_MODE=release` also built, signed/verified, installed and launched 006
   on the iPhone, and built/installed/launched in the Simulator. Both streamed
@@ -100,10 +101,14 @@ Both runs used portrait, scale 3, debug builds, no debugger. The table uses the
 **first 30 once-per-second samples after discarding the initial sample** on
 each target; no interaction during those windows. These are not all frames.
 
-| Target | Physical viewport | Interval | CPU median | CPU min–max | Sampled deadline overruns |
-| --- | --- | --- | --- | --- | --- |
-| iPhone 14 Pro, iOS 26.6.2 | 1179×2556 | 16.68 ms | 3.07 ms | 2.79–3.31 ms | 0/30 |
-| iPhone 17 Pro Simulator, iOS 26.5, Apple M4 Mac | 1206×2622 | 16.67 ms | 2.64 ms | 2.17–4.05 ms | 0/30 |
+| Target | Interval | CPU median | CPU min–max | Sampled deadline overruns |
+| --- | --- | --- | --- | --- |
+| Physical iPhone | 16.68 ms | 3.07 ms | 2.79–3.31 ms | 0/30 |
+| iPhone Simulator | 16.67 ms | 2.64 ms | 2.17–4.05 ms | 0/30 |
+
+Owner-specific hardware, exact device OS/toolchain versions and viewport
+details are intentionally omitted from this public record. Retain any detailed
+environment inventory privately; these aggregate timings are only a sanity check.
 
 Different screen sizes, OS versions and hardware prevent treating this as a
 controlled benchmark. CPU cost includes rasterization/allocation/image copies;
@@ -115,8 +120,8 @@ proof of zero dropped frames or jank. The phone's observed cadence was about
 The actual device run supports retaining CPU raster for the current minimal
 scene (008-1), with a Metal re-evaluation before 020. It also demonstrates that
 the classic delegate launches with this SDK/device pair (002-1); it does not
-promise future SDK compatibility. Both debts remain for the Phase 0 gate.
-Phase 0 regression sweep/retrospective is deferred until 009 is reviewed.
+promise future SDK compatibility. Both debts were consciously retained at the
+[Phase 0 gate](phase-0-retrospective.md) after user approval of 009.
 
 Security review on 2026-09-26: no actual device identifiers, signing identities,
 private keys or access-token literals were found in tracked files or the staged
@@ -125,3 +130,8 @@ fingerprints in the runner's command echoes/errors; add regression tests and
 ignore rules for signing assets/local environment files. Native tool diagnostics
 are still passed through, and the generated development bundle necessarily
 embeds its provisioning profile. Those local artifacts must not be published.
+
+Follow-up privacy audit: see [SECURITY_REVIEW.md](../../SECURITY_REVIEW.md).
+The original review covered credential/device identifiers, not personal email
+in commit metadata or owner-specific hardware descriptions. Working-tree
+sanitization does not remove those descriptions from existing local history.

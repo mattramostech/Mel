@@ -98,3 +98,11 @@ Validation on 2026-09-25:
 - Examples 002–006 compile through Simulator all-targets clippy; 005 also
   launched and logged its initial draw. Manual review steps for 007 are in
   `examples/README.md`. No new product debt proposed; 002-1 remains for 008.
+
+## Superseded by 010 (position migration timing only)
+
+[ADR 010](010-offset-size.md) introduces Offset without replacing platform's
+`PointerPosition`: foundation is above platform in the documented layering.
+Apps can construct an Offset from `x/y` explicitly. A future shared event
+boundary must resolve ownership before replacing this carrier; no upward
+dependency is introduced merely because the geometry type now exists.

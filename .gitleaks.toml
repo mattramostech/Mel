@@ -1,0 +1,42 @@
+title = "Mel public-repository secret and privacy checks"
+
+[extend]
+useDefault = true
+
+# Device/account metadata is sensitive even when it is not a credential.
+[[rules]]
+id = "apple-device-udid"
+description = "Concrete modern Apple device identifier"
+regex = '''(?i)\b[0-9a-f]{8}-[0-9a-f]{16}\b'''
+
+[[rules]]
+id = "device-or-profile-uuid"
+description = "Concrete UUID: inspect for device, Simulator or profile identity"
+regex = '''(?i)\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b'''
+
+[[rules]]
+id = "personal-home-directory"
+description = "Personal username in an absolute home directory"
+regex = '''/(?:Users|home)/[A-Za-z0-9._-]+'''
+
+[[rules]]
+id = "apple-signing-identity"
+description = "Concrete Apple signing certificate identity"
+regex = '''(?:Apple Development|Apple Distribution|iPhone Developer|iPhone Distribution):[^\r\n"']*\([A-Z0-9]{10}\)'''
+
+[[rules]]
+id = "apple-team-id"
+description = "Concrete Apple development team assignment"
+regex = '''(?:DEVELOPMENT_TEAM|TEAM_ID)\s*[:=]\s*["']?([A-Z0-9]{10})\b'''
+secretGroup = 1
+
+[[rules]]
+id = "personal-email-address"
+description = "Personal contact address, including in commit metadata exports"
+regex = '''(?i)\b[A-Za-z0-9._%+-]+@(?:gmail|googlemail|outlook|hotmail|live|icloud|me|yahoo|protonmail|proton)\.[A-Za-z]{2,}\b'''
+
+[[rules]]
+id = "legacy-device-or-signing-id"
+description = "Literal legacy UDID or signing certificate fingerprint"
+regex = '''(?i)(?:udid|signing_identity|certificate_fingerprint)\s*["']?\s*[:=]\s*["']?([0-9a-f]{40})\b'''
+secretGroup = 1

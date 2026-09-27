@@ -40,7 +40,7 @@ class SigningTests(unittest.TestCase):
             "hardwareProperties": {
                 "platform": "iOS", "reality": "physical", "deviceType": "iPhone", "udid": "device-udid",
             },
-            "deviceProperties": {"osVersionNumber": "26.6.2", "developerModeStatus": "enabled"},
+            "deviceProperties": {"osVersionNumber": "17.0", "developerModeStatus": "enabled"},
         }
         self.bundle_id = "dev.mel.example.006-frame-timing"
 
