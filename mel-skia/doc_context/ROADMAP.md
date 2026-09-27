@@ -66,10 +66,10 @@ No Skia dependency in this layer.
 - [x] **011 — Rect** — `from_ltwh`/`from_ltrb`/`from_center`, intersection, union,
   inflate/deflate, contains, overlaps.
   *Done when:* tests pass, including empty/inverted rect semantics (ADR: match Flutter or fix it?).
-- [~] **012 — Radius & RRect** — circular/elliptical radii, corner-specific,
+- [x] **012 — Radius & RRect** — circular/elliptical radii, corner-specific,
   `contains`, inner/outer rect.
   *Done when:* tests pass; example draws nothing yet (painting comes in Phase 2).
-- [ ] **013 — Color** — ARGB storage, opacity helpers, `lerp`, predefined palette,
+- [~] **013 — Color** — ARGB storage, opacity helpers, `lerp`, predefined palette,
   color spaces deferred (ADR).
   *Done when:* tests cover lerp/opacity rounding behavior.
 - [ ] **014 — Alignment & EdgeInsets** — resolve against Size/Rect, `lerp`,

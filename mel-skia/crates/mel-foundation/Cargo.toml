@@ -19,3 +19,7 @@ path = "../../examples/011_rect.rs"
 [[example]]
 name = "012_radius_rrect"
 path = "../../examples/012_radius_rrect.rs"
+
+[[example]]
+name = "013_color"
+path = "../../examples/013_color.rs"

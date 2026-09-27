@@ -96,7 +96,7 @@ The host demo draws nothing; rendering waits for Phase 2. Existing debts
 
 ## Review outcome
 
-Pending human review. Implementation self-check: Correctness ✅ ·
+Human review approved on 2026-09-26. Implementation self-check: Correctness ✅ ·
 Architecture ✅ · API ergonomics ✅ · Understandability ✅ · Scope discipline ✅.
 No new debt proposed.
 

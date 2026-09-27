@@ -3,8 +3,8 @@
 Numbered runnable demos, one per visible feature (`NNN_slug.rs`), never
 deleted — the living history of the project and its regression checks
 (CONTEXT.md §2.4). Files live here and attach to their owning crate as
-`[[example]]` targets: iOS demos use `mel-platform` (ADR 002); pure geometry
-uses `mel-foundation` (ADR 010).
+`[[example]]` targets: iOS demos use `mel-platform` (ADR 002); pure foundation
+logic uses `mel-foundation` (ADR 010).
 
 Launch any iOS demo on the Simulator with the one-command flow:
 
@@ -30,6 +30,7 @@ running). See [ADR 002](../DECISIONS/002-app-shell-blank-app.md).
 | 010 | `010_offset_size` (host) | Offset/Size arithmetic, origin-relative center, containment, interpolation and unbounded extents |
 | 011 | `011_rect` (host) | Rect construction, clipping intersection, bounding union, half-open containment and empty/inverted overlap rules |
 | 012 | `012_radius_rrect` (host) | Circular/elliptical corners, proportional fitting, containment and safe inner/outer bounds |
+| 013 | `013_color` (host) | ARGB packing, quantized opacity, channel interpolation/extrapolation and explicit fading |
 
 Feature 010 runs on the Mac without UIKit or Skia:
 
@@ -68,6 +69,21 @@ scale applied to oversized elliptical radii. Assertions check half-open edges,
 overlapping diagonal corner regions and invalid/empty geometry. Fitting and
 safe inner bounds return `None` for negative/non-finite radii or unusable
 bounds; containment returns false. See [ADR 012](../DECISIONS/012-radius-rrect.md).
+
+Feature 013 runs on the host without drawing:
+
+```sh
+cargo run -p mel-foundation --example 013_color
+cargo test -p mel-foundation --test color
+```
+
+The console prints honey at half opacity (`0x80ffc107`), a red-to-blue
+interpolation table, and the difference between fading with preserved RGB and
+interpolating from transparent black. Assertions check byte rounding and
+rejection of invalid opacity/non-finite interpolation factors. Opacity `0.5`
+stores alpha 128 and reads back as `128 / 255`; RGB remains unpremultiplied.
+Palette constants are channel extrema, not Material swatches. See
+[ADR 013](../DECISIONS/013-color.md).
 
 Feature 006: `make run EXAMPLE=006_frame_timing` starts a four-second horizontal cycle inside the safe
 area. Check that the motion remains smooth after rotation; changing refresh

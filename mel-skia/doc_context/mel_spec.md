@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-09-26, after feature 011 approval and feature 012 implementation (pending review)._
+_Last updated: 2026-09-26, after feature 012 approval and feature 013 implementation (pending review)._
 
 ---
 
@@ -23,10 +23,10 @@ _Last updated: 2026-09-26, after feature 011 approval and feature 012 implementa
   app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
   rotation), 005 (redraw-on-demand loop), 006 (frame timing), 007 (touch input),
   008 (app lifecycle & Metal decision), 009 (real-device deployment),
-  010 (Offset & Size), 011 (Rect).
+  010 (Offset & Size), 011 (Rect), 012 (Radius & RRect).
 - **Phase 0 gate:** regression sweep, debt review and retrospective completed.
-- **In progress:** 012 — Radius & RRect (built, pending review).
-- **Next up:** 013 — Color, after 012 review.
+- **In progress:** 013 — Color (built, pending review).
+- **Next up:** 014 — Alignment & EdgeInsets, after 013 review.
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene`) and 008-1
   (CPU raster retained — see [DEBT.md](../DEBT.md)).
 
@@ -57,9 +57,9 @@ late terminal events are ignored. Rotation updates viewport metrics.
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001–012 + Phase 0 retrospective
+├── DECISIONS/            001–013 + Phase 0 retrospective
 ├── DEBT.md               002-1 and 008-1 retained
-├── examples/             002–008 iOS demos · 010–012 host geometry demos + README
+├── examples/             002–008 iOS demos · 010–013 host foundation demos + README
 ├── scripts/              run-sim.sh (002) · run-device.py + signing tests (009)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
@@ -68,7 +68,7 @@ mel-skia/
 
 | Crate | Layer (CONTEXT.md §5) | State |
 | --- | --- | --- |
-| `mel-foundation` | geometry, color, ids | **Offset & Size (010), Rect (011), Radius & RRect (012)** — see below |
+| `mel-foundation` | geometry, color, ids | **Offset & Size (010), Rect (011), Radius & RRect (012), Color (013)** — see below |
 | `mel-painting` | Canvas/Paint over Skia — the only crate ever allowed `skia-safe` | **bootstraps `fill()` (003) + `fill_rect()` (004)** — see §5 |
 | `mel-compositing` | layer tree, scenes | empty placeholder |
 | `mel-scheduling` | frame pipeline, tickers | empty placeholder |
@@ -197,6 +197,46 @@ intentional differences from Flutter and the limited API scope.
 contract and checks sampled containment against horizontal ellipse slices.
 Run `cargo run -p mel-foundation --example 012_radius_rrect` on the host;
 no painting or iOS UI is involved.
+
+### `mel-foundation` colors (013)
+
+[`src/color.rs`](../crates/mel-foundation/src/color.rs) adds `Color`, exported
+at the crate root: a dependency-free `Copy` value with private `u32` ARGB
+storage, `Default` (transparent black), exact `Eq` and `Hash`. RGB is
+unpremultiplied sRGB; alpha is linear. Packed integer order is `0xAARRGGBB`,
+independent of host byte order and the platform's raster format.
+
+```rust
+use mel_foundation::Color;
+let honey = Color::from_argb32(0xffff_c107);
+let faded = honey.with_opacity(0.5).unwrap();
+assert_eq!(faded.to_argb32(), 0x80ff_c107);
+assert_eq!(faded.opacity(), 128.0 / 255.0);
+assert_eq!(Color::lerp(Color::RED, Color::BLUE, 0.5),
+           Some(Color::from_argb(255, 128, 0, 128)));
+```
+
+Const APIs cover `from_argb32`, `from_argb(u8, u8, u8, u8)`, `to_argb32`,
+`alpha/red/green/blue` getters and `with_alpha`. All bits are preserved,
+including RGB at zero alpha. `from_rgbo`/`with_opacity` accept finite values
+in `[0, 1]`, rounding `opacity * 255` to a byte (half ties upward); invalid
+inputs return `None`. Opacity replacement preserves RGB and does not multiply
+existing alpha. `opacity` returns quantized alpha divided by 255.
+
+`Color::lerp(a, b, t)` returns `None` for non-finite `t`. Finite factors
+interpolate/extrapolate each byte as `a + (b - a) * t`, clamp to `[0, 255]`
+and round half upward. Extreme finite factors saturate overflowing channels;
+equal channels stay equal. Interpolation is in encoded sRGB with straight
+alpha, not linear-light or premultiplied space. Use `color.with_alpha(0)`
+as an endpoint to fade while retaining RGB. `TRANSPARENT` means black.
+
+The basic palette is `TRANSPARENT`, `BLACK`, `WHITE`, `RED`, `GREEN`, `BLUE`,
+`YELLOW`, `CYAN`, `MAGENTA`; `GREEN` is full-intensity RGB, not a Material
+swatch. Color spaces, higher precision and painting integration are deferred.
+See [ADR 013](../DECISIONS/013-color.md) and public contract tests in
+[`tests/color.rs`](../crates/mel-foundation/tests/color.rs), including an
+integer-rational interpolation oracle for every byte pair. Run
+`cargo run -p mel-foundation --example 013_color` on the host; no iOS UI needed.
 
 ## 4. `mel-platform` — the app shell (features 002–008)
 
@@ -356,6 +396,7 @@ cargo test --workspace
 cargo run -p mel-foundation --example 010_offset_size
 cargo run -p mel-foundation --example 011_rect
 cargo run -p mel-foundation --example 012_radius_rrect
+cargo run -p mel-foundation --example 013_color
 cargo test -p mel-platform --example 006_frame_timing
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 bash -n scripts/run-sim.sh
@@ -472,6 +513,10 @@ accept `EXAMPLE=NNN_slug`.
   proportional radius fitting, all-corner elliptical containment and fitted
   safe inner bounds. Invalid rounded geometry returns `None`/false without
   altering stored inputs. Pure-logic host demo; painting remains in Phase 2.
+- **ADR 013** — packed ARGB Color with straight sRGB bytes, exact equality
+  and hashing; checked opacity replacement and channel interpolation with
+  half-up quantization. Small channel-extrema palette; color spaces deferred.
+  No painting/platform migration; pure-logic host demo.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
@@ -483,15 +528,15 @@ accept `EXAMPLE=NNN_slug`.
   (Phase 8); touch events currently go directly to the App.
 - No automatic provisioning/profile renewal or App Store export; no UIScene
   support yet. The device flow consumes an existing development profile.
-- No Mel `Canvas`/`Paint`/`Color` types — `fill()`/`fill_rect()` are the
-  entire painting API until Phase 2; four of the seven crates are still
-  empty.
+- No Mel `Canvas`/`Paint` types — `fill()`/`fill_rect()` are the entire
+  painting API until Phase 2 and do not consume foundation's Color yet;
+  four of the seven crates are still empty. Color supports only 8-bit sRGB.
 - No logging/debug tooling beyond `println!` through the attached console.
 
 ## 9. Where the next features land
 
-- **After 012 review:** 013 adds Color to `mel-foundation`, including ARGB
-  storage, opacity helpers, interpolation and a predefined palette.
+- **After 013 review:** 014 adds Alignment & EdgeInsets to `mel-foundation`,
+  including Size/Rect resolution and interpolation, with an ADR on RTL timing.
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 
