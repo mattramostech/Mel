@@ -29,6 +29,7 @@ running). See [ADR 002](../DECISIONS/002-app-shell-blank-app.md).
 | 009 | Reuses `006_frame_timing` | Signed physical-iPhone deployment via `make run-device`; hardware vs. Simulator timing sanity check |
 | 010 | `010_offset_size` (host) | Offset/Size arithmetic, origin-relative center, containment, interpolation and unbounded extents |
 | 011 | `011_rect` (host) | Rect construction, clipping intersection, bounding union, half-open containment and empty/inverted overlap rules |
+| 012 | `012_radius_rrect` (host) | Circular/elliptical corners, proportional fitting, containment and safe inner/outer bounds |
 
 Feature 010 runs on the Mac without UIKit or Skia:
 
@@ -54,6 +55,19 @@ with a centered clip, and their bounding union. Assertions check excluded
 right/bottom edges, a disjoint intersection that retains negative width,
 inflation/deflation, and rejection of empty, inverted or NaN overlap. No
 rendering or Simulator is needed. See [ADR 011](../DECISIONS/011-rect.md).
+
+Feature 012 also runs on the host and draws nothing:
+
+```sh
+cargo run -p mel-foundation --example 012_radius_rrect
+cargo test -p mel-foundation --test rrect
+```
+
+The console shows outer/inner bounds for four distinct corners and the common
+scale applied to oversized elliptical radii. Assertions check half-open edges,
+overlapping diagonal corner regions and invalid/empty geometry. Fitting and
+safe inner bounds return `None` for negative/non-finite radii or unusable
+bounds; containment returns false. See [ADR 012](../DECISIONS/012-radius-rrect.md).
 
 Feature 006: `make run EXAMPLE=006_frame_timing` starts a four-second horizontal cycle inside the safe
 area. Check that the motion remains smooth after rotation; changing refresh

@@ -13,7 +13,7 @@ Rules of this file:
   [ROADMAP.md](ROADMAP.md) checkboxes, process in [CONTEXT.md](CONTEXT.md),
   rationale in `DECISIONS/`. On any conflict, those win — then fix this file.
 
-_Last updated: 2026-09-26, after feature 010 approval and feature 011 implementation (pending review)._
+_Last updated: 2026-09-26, after feature 011 approval and feature 012 implementation (pending review)._
 
 ---
 
@@ -23,10 +23,10 @@ _Last updated: 2026-09-26, after feature 010 approval and feature 011 implementa
   app), 003 (Skia surface on screen), 004 (scale factor, safe areas &
   rotation), 005 (redraw-on-demand loop), 006 (frame timing), 007 (touch input),
   008 (app lifecycle & Metal decision), 009 (real-device deployment),
-  010 (Offset & Size).
+  010 (Offset & Size), 011 (Rect).
 - **Phase 0 gate:** regression sweep, debt review and retrospective completed.
-- **In progress:** 011 — Rect (built, pending review).
-- **Next up:** 012 — Radius & RRect, after 011 review.
+- **In progress:** 012 — Radius & RRect (built, pending review).
+- **Next up:** 013 — Color, after 012 review.
 - **Open debt:** 002-1 (classic lifecycle vs `UIScene`) and 008-1
   (CPU raster retained — see [DEBT.md](../DEBT.md)).
 
@@ -57,9 +57,9 @@ late terminal events are ignored. Rotation updates viewport metrics.
 ```text
 mel-skia/
 ├── doc_context/          CONTEXT.md (process) · ROADMAP.md (status) · this file
-├── DECISIONS/            001–011 + Phase 0 retrospective
+├── DECISIONS/            001–012 + Phase 0 retrospective
 ├── DEBT.md               002-1 and 008-1 retained
-├── examples/             002–008 iOS demos · 010/011 host geometry demos + README
+├── examples/             002–008 iOS demos · 010–012 host geometry demos + README
 ├── scripts/              run-sim.sh (002) · run-device.py + signing tests (009)
 ├── rust-toolchain.toml   stable · edition 2024 · both iOS targets pinned
 ├── .github/workflows/    CI exists but is disabled/commented (ADR 001 amendment)
@@ -68,7 +68,7 @@ mel-skia/
 
 | Crate | Layer (CONTEXT.md §5) | State |
 | --- | --- | --- |
-| `mel-foundation` | geometry, color, ids | **Offset & Size (010), Rect (011)** — see below |
+| `mel-foundation` | geometry, color, ids | **Offset & Size (010), Rect (011), Radius & RRect (012)** — see below |
 | `mel-painting` | Canvas/Paint over Skia — the only crate ever allowed `skia-safe` | **bootstraps `fill()` (003) + `fill_rect()` (004)** — see §5 |
 | `mel-compositing` | layer tree, scenes | empty placeholder |
 | `mel-scheduling` | frame pipeline, tickers | empty placeholder |
@@ -153,6 +153,50 @@ stored edges; the latter recognizes either infinity sign. Arithmetic follows
 IEEE-754, including undefined infinite centers. See [ADR 011](../DECISIONS/011-rect.md)
 and the public contract tests in [`tests/rect.rs`](../crates/mel-foundation/tests/rect.rs).
 Run `cargo run -p mel-foundation --example 011_rect` on the host.
+
+### `mel-foundation` rounded rectangles (012)
+
+[`src/rrect.rs`](../crates/mel-foundation/src/rrect.rs) adds `Radius` and
+`RRect`, exported at the crate root. Both are dependency-free `Copy` values
+with public fields, `ZERO`, `Default` and exact `PartialEq`. Radius has `x/y`
+components with const `circular`/`elliptical` constructors. RRect composes
+`bounds: Rect` with `top_left/top_right/bottom_right/bottom_left: Radius`.
+Its const constructors accept either one uniform radius or four clockwise
+corners starting at top-left.
+
+```rust
+use mel_foundation::{Offset, Radius, Rect, RRect};
+let rounded = RRect::from_rect_radius(
+    Rect::from_ltwh(10.0, 20.0, 100.0, 80.0),
+    Radius::elliptical(100.0, 80.0),
+);
+assert_eq!(rounded.scale_radii().unwrap().top_left, Radius::elliptical(50.0, 40.0));
+assert!(rounded.contains(Offset::new(60.0, 60.0)));
+assert!(!rounded.contains(rounded.outer_rect().top_left()));
+let inner: Rect = rounded.safe_inner_rect().unwrap();
+assert!(inner.contains(Offset::new(60.0, 60.0)));
+```
+
+`outer_rect` returns the original bounds. `scale_radii` uses one factor at
+most one to fit every adjacent pair to its side; it returns a copy, with no
+cache or mutation. `contains` fits radii before testing half-open bounds and
+every applicable corner ellipse (including overlapping diagonal regions).
+Arc boundaries are included; outer right/bottom edges remain excluded. Either
+zero component makes that corner square. `safe_inner_rect` insets each side
+by its maximum fitted radius component times `1 - 1/sqrt(2)`.
+
+Constructors retain all inputs. Rounded queries require finite bounds and
+derived extents, nonnegative extents, and finite nonnegative radii. Fitting
+and inner bounds return `Option`, with `None` outside this domain; containment
+returns false. Empty but noninverted bounds can be fitted, yet contain no
+points. Adjacent-radius sum overflow is handled; normal `f64` rounding and
+underflow still apply. See [ADR 012](../DECISIONS/012-radius-rrect.md) for
+intentional differences from Flutter and the limited API scope.
+
+[`tests/rrect.rs`](../crates/mel-foundation/tests/rrect.rs) covers the public
+contract and checks sampled containment against horizontal ellipse slices.
+Run `cargo run -p mel-foundation --example 012_radius_rrect` on the host;
+no painting or iOS UI is involved.
 
 ## 4. `mel-platform` — the app shell (features 002–008)
 
@@ -311,6 +355,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p mel-foundation --example 010_offset_size
 cargo run -p mel-foundation --example 011_rect
+cargo run -p mel-foundation --example 012_radius_rrect
 cargo test -p mel-platform --example 006_frame_timing
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 bash -n scripts/run-sim.sh
@@ -423,6 +468,10 @@ accept `EXAMPLE=NNN_slug`.
   half-open containment, bounding union and positive-area overlap. Overlap
   rejects Flutter's empty/inverted/NaN false positives; extrema retain NaN.
   Named origin/size construction and `Offset & Size`; pure-logic host demo.
+- **ADR 012** — Radius plus RRect composition with four named corners;
+  proportional radius fitting, all-corner elliptical containment and fitted
+  safe inner bounds. Invalid rounded geometry returns `None`/false without
+  altering stored inputs. Pure-logic host demo; painting remains in Phase 2.
 - `unsafe` only in the platform/painting layers, each use justified
   (CONTEXT.md §5).
 
@@ -441,8 +490,8 @@ accept `EXAMPLE=NNN_slug`.
 
 ## 9. Where the next features land
 
-- **After 011 review:** 012 adds Radius & RRect to `mel-foundation`, including
-  corner-specific radii, containment and inner/outer bounds.
+- **After 012 review:** 013 adds Color to `mel-foundation`, including ARGB
+  storage, opacity helpers, interpolation and a predefined palette.
 
 ## 10. Working rules recap (full text: CONTEXT.md)
 

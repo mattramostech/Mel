@@ -15,3 +15,7 @@ path = "../../examples/010_offset_size.rs"
 [[example]]
 name = "011_rect"
 path = "../../examples/011_rect.rs"
+
+[[example]]
+name = "012_radius_rrect"
+path = "../../examples/012_radius_rrect.rs"

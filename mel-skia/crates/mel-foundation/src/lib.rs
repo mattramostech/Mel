@@ -6,6 +6,8 @@
 
 mod geometry;
 mod rect;
+mod rrect;
 
 pub use geometry::{Offset, Size};
 pub use rect::Rect;
+pub use rrect::{RRect, Radius};
